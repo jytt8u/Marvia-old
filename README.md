@@ -10,19 +10,19 @@
 
 [Русский](README.md) · [English](README.en.md) · [简体中文](README.zh-CN.md) · [فارسی](README.fa.md)
 
-<a href="https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27"><img alt="Скачать последний выпуск" src="https://img.shields.io/github/v/release/jytt8u/marvia?include_prereleases&display_name=tag&style=for-the-badge&label=%D0%A1%D0%9A%D0%90%D0%A7%D0%90%D0%A2%D0%AC%20%D0%9F%D0%9E%D0%A1%D0%9B%D0%95%D0%94%D0%9D%D0%98%D0%99%20%D0%92%D0%AB%D0%9F%D0%A3%D0%A1%D0%9A&labelColor=30353b&color=c3ccd6" height="40"></a>
+<a href="https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28"><img alt="Скачать последний выпуск" src="https://img.shields.io/github/v/release/jytt8u/marvia?include_prereleases&display_name=tag&style=for-the-badge&label=%D0%A1%D0%9A%D0%90%D0%A7%D0%90%D0%A2%D0%AC%20%D0%9F%D0%9E%D0%A1%D0%9B%D0%95%D0%94%D0%9D%D0%98%D0%99%20%D0%92%D0%AB%D0%9F%D0%A3%D0%A1%D0%9A&labelColor=30353b&color=c3ccd6" height="40"></a>
 
 <sub>APK для Android · установщик Windows · архивы для серверов · контрольные суммы</sub>
 
-[![Android APK](https://img.shields.io/badge/ANDROID-APK-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.27/marvia-android.apk)
+[![Android APK](https://img.shields.io/badge/ANDROID-APK-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.28/marvia-android.apk)
 [Обновлять через Obtainium](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22io.marvia.android%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fjytt8u%2Fmarvia%22%2C%22author%22%3A%22jytt8u%22%2C%22name%22%3A%22Marvia%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Atrue%2C%5C%22verifyLatestTag%5C%22%3Afalse%2C%5C%22apkFilterRegEx%5C%22%3A%5C%22%5Emarvia-android%5C%5C%5C%5C.apk%24%5C%22%7D%22%7D)
-[![Windows test](https://img.shields.io/badge/WINDOWS-TEST-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27)
+[![Windows test](https://img.shields.io/badge/WINDOWS-TEST-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28)
 [![Panel](https://img.shields.io/badge/PANEL-INSTALL-687482?style=for-the-badge&labelColor=30353b)](#установка-панели)
 [![Docs](https://img.shields.io/badge/DOCS-GUIDE-687482?style=for-the-badge&labelColor=30353b)](docs/guide.md)
 
-**Стадия — alpha, `0.13.0-alpha.27`.** Выпуск 1.0 отложен до проверки на
+**Стадия — alpha, `0.13.0-alpha.28`.** Выпуск 1.0 отложен до проверки на
 реальных устройствах и сетях — [критерии](docs/development-plan.md).
-Свежая тестовая сборка — [v0.13.0-alpha.27](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27); стабильной она не объявляется.
+Свежая тестовая сборка — [v0.13.0-alpha.28](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28); стабильной она не объявляется.
 
 [Свой VPN с нуля](docs/start-from-zero.md) · [Releases](https://github.com/jytt8u/marvia/releases) · [CI](https://github.com/jytt8u/marvia/actions) · [Privacy](docs/privacy.md)
 
@@ -132,8 +132,8 @@ Marvia пока уступает по автоматическому месяч�
 
 ## Начать
 
-> **Получили ключ?** Скачайте [Android APK](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.27/marvia-android.apk)
-> или [установщик Windows](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27) (`marvia-windows-setup.exe`;
+> **Получили ключ?** Скачайте [Android APK](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.28/marvia-android.apk)
+> или [установщик Windows](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28) (`marvia-windows-setup.exe`;
 > [подробнее](docs/start-from-zero.md#6-выпустить-доступ-себе-и-подключить-клиент)),
 > добавьте ссылку `marvia://…` в приложении и подключитесь.
 > Не работает — [что делать при какой ошибке](docs/troubleshooting.md).
@@ -158,7 +158,7 @@ Android также принимает VLESS, VMess, Trojan, Shadowsocks, Hysteri
 спрашивает. Что файл настоящий, проверяется ниже, а почему подписи пока нет и
 как её получить — в [руководстве](docs/guide.md#smartscreen-почему-windows-предупреждает).
 
-Публичная alpha.27 — тестовая.
+Публичная alpha.28 — тестовая.
 Полная проверка на реальных устройствах ещё не завершена.
 Известные ограничения — в [списке изменений](CHANGELOG.md).
 

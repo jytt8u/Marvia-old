@@ -10,19 +10,19 @@ picks a node by itself and, if it stops responding, looks for a working one.
 
 [Русский](README.md) · [English](README.en.md) · [简体中文](README.zh-CN.md) · [فارسی](README.fa.md)
 
-<a href="https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27"><img alt="Download the latest release" src="https://img.shields.io/github/v/release/jytt8u/marvia?include_prereleases&display_name=tag&style=for-the-badge&label=DOWNLOAD%20LATEST%20RELEASE&labelColor=30353b&color=c3ccd6" height="40"></a>
+<a href="https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28"><img alt="Download the latest release" src="https://img.shields.io/github/v/release/jytt8u/marvia?include_prereleases&display_name=tag&style=for-the-badge&label=DOWNLOAD%20LATEST%20RELEASE&labelColor=30353b&color=c3ccd6" height="40"></a>
 
 <sub>Android APK · Windows installer · server archives · checksums</sub>
 
-[![Android APK](https://img.shields.io/badge/ANDROID-APK-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.27/marvia-android.apk)
+[![Android APK](https://img.shields.io/badge/ANDROID-APK-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.28/marvia-android.apk)
 [Update with Obtainium](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22io.marvia.android%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fjytt8u%2Fmarvia%22%2C%22author%22%3A%22jytt8u%22%2C%22name%22%3A%22Marvia%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Atrue%2C%5C%22verifyLatestTag%5C%22%3Afalse%2C%5C%22apkFilterRegEx%5C%22%3A%5C%22%5Emarvia-android%5C%5C%5C%5C.apk%24%5C%22%7D%22%7D)
-[![Windows test](https://img.shields.io/badge/WINDOWS-TEST-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27)
+[![Windows test](https://img.shields.io/badge/WINDOWS-TEST-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28)
 [![Panel](https://img.shields.io/badge/PANEL-INSTALL-687482?style=for-the-badge&labelColor=30353b)](#install-the-panel)
 [![Docs](https://img.shields.io/badge/DOCS-GUIDE-687482?style=for-the-badge&labelColor=30353b)](docs/guide.md)
 
-**Stage: alpha, `0.13.0-alpha.27`.** 1.0 is postponed until it is verified on
+**Stage: alpha, `0.13.0-alpha.28`.** 1.0 is postponed until it is verified on
 real devices and networks — [criteria (Russian)](docs/development-plan.md).
-The latest test build is [v0.13.0-alpha.27](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27); it is not declared stable.
+The latest test build is [v0.13.0-alpha.28](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28); it is not declared stable.
 
 [Your VPN from scratch (Russian)](docs/start-from-zero.md) · [Releases](https://github.com/jytt8u/marvia/releases) · [CI](https://github.com/jytt8u/marvia/actions) · [Privacy](docs/privacy.md)
 
@@ -128,8 +128,8 @@ supports the feature comparison; no matched speed ranking is available.
 
 ## Get started
 
-> **Have a key?** Download the [Android APK](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.27/marvia-android.apk)
-> or the [Windows installer](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27) (`marvia-windows-setup.exe`;
+> **Have a key?** Download the [Android APK](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.28/marvia-android.apk)
+> or the [Windows installer](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28) (`marvia-windows-setup.exe`;
 > [details (Russian)](docs/start-from-zero.md#6-выпустить-доступ-себе-и-подключить-клиент)),
 > add a `marvia://…` link in the app, and connect.
 
@@ -151,7 +151,7 @@ antivirus: it greets any file without a paid publisher signature until the
 file has enough downloads. Click **More info** → **Run anyway**. It asks once,
 on the installer; the installed app does not ask again.
 
-The public alpha.27 is a test release.
+The public alpha.28 is a test release.
 Verification on real devices is not complete. Known limitations are in the
 [changelog (Russian)](CHANGELOG.md).
 

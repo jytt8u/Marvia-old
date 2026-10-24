@@ -14,12 +14,12 @@
 
 [Русский](README.md) · [English](README.en.md) · [简体中文](README.zh-CN.md) · [فارسی](README.fa.md)
 
-<a href="https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27"><img alt="دانلود آخرین نسخه" src="https://img.shields.io/github/v/release/jytt8u/marvia?include_prereleases&display_name=tag&style=for-the-badge&label=%D8%AF%D8%A7%D9%86%D9%84%D9%88%D8%AF%20%D8%A2%D8%AE%D8%B1%DB%8C%D9%86%20%D9%86%D8%B3%D8%AE%D9%87&labelColor=30353b&color=c3ccd6" height="40"></a>
+<a href="https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28"><img alt="دانلود آخرین نسخه" src="https://img.shields.io/github/v/release/jytt8u/marvia?include_prereleases&display_name=tag&style=for-the-badge&label=%D8%AF%D8%A7%D9%86%D9%84%D9%88%D8%AF%20%D8%A2%D8%AE%D8%B1%DB%8C%D9%86%20%D9%86%D8%B3%D8%AE%D9%87&labelColor=30353b&color=c3ccd6" height="40"></a>
 
 <sub>APK اندروید · نصب‌کنندهٔ ویندوز · بسته‌های سرور · چک‌سام‌ها</sub>
 
-[![Android APK](https://img.shields.io/badge/ANDROID-APK-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.27/marvia-android.apk)
-[![Windows test](https://img.shields.io/badge/WINDOWS-TEST-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27)
+[![Android APK](https://img.shields.io/badge/ANDROID-APK-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.28/marvia-android.apk)
+[![Windows test](https://img.shields.io/badge/WINDOWS-TEST-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28)
 [![Panel](https://img.shields.io/badge/PANEL-INSTALL-687482?style=for-the-badge&labelColor=30353b)](#نصب-پنل)
 [![Docs](https://img.shields.io/badge/DOCS-GUIDE-687482?style=for-the-badge&labelColor=30353b)](docs/guide.md)
 
@@ -27,9 +27,9 @@
 
 <div dir="rtl">
 
-**مرحله: آلفا، `0.13.0-alpha.27`.** نسخهٔ 1.0 تا آزمایش روی دستگاه‌ها و
+**مرحله: آلفا، `0.13.0-alpha.28`.** نسخهٔ 1.0 تا آزمایش روی دستگاه‌ها و
 شبکه‌های واقعی عقب افتاده است — [معیارها (روسی)](docs/development-plan.md).
-تازه‌ترین نسخهٔ آزمایشی [v0.13.0-alpha.27](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27)
+تازه‌ترین نسخهٔ آزمایشی [v0.13.0-alpha.28](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28)
 است و پایدار اعلام نشده است.
 
 بیشتر مستندات فعلاً به روسی است؛ نسخهٔ [انگلیسی](README.en.md) کامل‌تر است.
@@ -146,15 +146,15 @@ Marvia هنوز ریست خودکار ماهانهٔ سهمیه ندارد. خر
 
 ## شروع
 
-> **کلید دارید؟** [APK اندروید](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.27/marvia-android.apk)
-> یا [نصب‌کنندهٔ ویندوز](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27)
+> **کلید دارید؟** [APK اندروید](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.28/marvia-android.apk)
+> یا [نصب‌کنندهٔ ویندوز](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28)
 > (`marvia-windows-setup.exe`) را بگیرید، لینک `marvia://…` را در برنامه اضافه
 > کنید و وصل شوید.
 
 اندروید لینک‌های VLESS، VMess، Trojan، Shadowsocks، Hysteria2 و WireGuard را هم
 می‌پذیرد. برنامه هنوز در Google Play نیست.
 
-نسخهٔ عمومی alpha.27 آزمایشی است.
+نسخهٔ عمومی alpha.28 آزمایشی است.
 آزمایش روی دستگاه‌های واقعی هنوز تمام نشده است.
 
 ### بررسی اصالت فایل‌ها

@@ -9,17 +9,17 @@
 
 [Русский](README.md) · [English](README.en.md) · [简体中文](README.zh-CN.md) · [فارسی](README.fa.md)
 
-<a href="https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27"><img alt="下载最新版本" src="https://img.shields.io/github/v/release/jytt8u/marvia?include_prereleases&display_name=tag&style=for-the-badge&label=%E4%B8%8B%E8%BD%BD%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC&labelColor=30353b&color=c3ccd6" height="40"></a>
+<a href="https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28"><img alt="下载最新版本" src="https://img.shields.io/github/v/release/jytt8u/marvia?include_prereleases&display_name=tag&style=for-the-badge&label=%E4%B8%8B%E8%BD%BD%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC&labelColor=30353b&color=c3ccd6" height="40"></a>
 
 <sub>Android APK · Windows 安装程序 · 服务器压缩包 · 校验和</sub>
 
-[![Android APK](https://img.shields.io/badge/ANDROID-APK-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.27/marvia-android.apk)
-[![Windows test](https://img.shields.io/badge/WINDOWS-TEST-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27)
+[![Android APK](https://img.shields.io/badge/ANDROID-APK-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.28/marvia-android.apk)
+[![Windows test](https://img.shields.io/badge/WINDOWS-TEST-687482?style=for-the-badge&labelColor=30353b)](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28)
 [![Panel](https://img.shields.io/badge/PANEL-INSTALL-687482?style=for-the-badge&labelColor=30353b)](#安装面板)
 [![Docs](https://img.shields.io/badge/DOCS-GUIDE-687482?style=for-the-badge&labelColor=30353b)](docs/guide.md)
 
-**当前阶段：alpha，`0.13.0-alpha.27`。** 1.0 推迟发布，直到在真实设备和网络上完成验证——
-[标准（俄语）](docs/development-plan.md)。最新测试版本为 [v0.13.0-alpha.27](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27)，不宣称稳定。
+**当前阶段：alpha，`0.13.0-alpha.28`。** 1.0 推迟发布，直到在真实设备和网络上完成验证——
+[标准（俄语）](docs/development-plan.md)。最新测试版本为 [v0.13.0-alpha.28](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28)，不宣称稳定。
 
 [从零搭建自己的 VPN（俄语）](docs/start-from-zero.md) · [Releases](https://github.com/jytt8u/marvia/releases) · [CI](https://github.com/jytt8u/marvia/actions) · [Privacy](docs/privacy.md)
 
@@ -122,8 +122,8 @@ Marvia 尚缺少每月自动重置额度。从 Marzban 和 3x-ui
 
 ## 开始使用
 
-> **已有密钥？** 下载 [Android APK](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.27/marvia-android.apk)
-> 或 [Windows 安装程序](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.27)（`marvia-windows-setup.exe`；
+> **已有密钥？** 下载 [Android APK](https://github.com/jytt8u/marvia/releases/download/v0.13.0-alpha.28/marvia-android.apk)
+> 或 [Windows 安装程序](https://github.com/jytt8u/marvia/releases/tag/v0.13.0-alpha.28)（`marvia-windows-setup.exe`；
 > [详细说明（俄语）](docs/start-from-zero.md#6-выпустить-доступ-себе-и-подключить-клиент)），
 > 在应用中添加 `marvia://…` 链接，然后连接。
 
@@ -152,7 +152,7 @@ gh attestation verify SHA256SUMS --bundle SHA256SUMS.sigstore.json --repo jytt8u
 
 ### 安装面板
 
-公开的 alpha.27 是测试版本，尚未完成真实设备验证。
+公开的 alpha.28 是测试版本，尚未完成真实设备验证。
 已知限制见[更新日志（俄语）](CHANGELOG.md)。
 单个 VPS 上面板使用 8443，节点使用 443；请先阅读[完整安装步骤](docs/start-from-zero.md)。
 

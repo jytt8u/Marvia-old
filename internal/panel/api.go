@@ -895,8 +895,8 @@ func (a *API) nodeUsage(w http.ResponseWriter, r *http.Request, n Node) {
 	if !decodeFromNode(w, r, &body) {
 		return
 	}
-	if n.Country == "" {
-		a.fillCountry(n.ID, n.Address)
+	if countryUnknown(n.Country) {
+		a.fillCountry(n.ID, n.Country, n.Address)
 	}
 	if err := a.store.ReportNodeBuild(r.Context(), n.ID, clip(body.Version, 40), clip(body.Arch, 16)); err != nil {
 		log.Printf("версия ноды %d не сохранилась: %v", n.ID, err)

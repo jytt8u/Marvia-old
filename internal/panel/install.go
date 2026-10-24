@@ -207,8 +207,8 @@ func (a *API) registerNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Страну не назвали — узнаём по адресу, фоном: установщик ждать не должен.
-	if node.Country == "" {
-		a.fillCountry(node.ID, node.Address)
+	if countryUnknown(node.Country) {
+		a.fillCountry(node.ID, node.Country, node.Address)
 	}
 	ok(w, map[string]any{"node": node, "token": nodeToken})
 }

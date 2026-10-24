@@ -584,8 +584,10 @@
   .flag { display: inline-flex; width: 26px; height: 18px; border-radius: 4px; overflow: hidden; flex: none;
     box-shadow: 0 0 0 1px rgba(128,128,128,.35); justify-self: center; }
   .flag svg { width: 100%; height: 100%; display: block; }
-  .flag.txt { align-items: center; justify-content: center; background: var(--shade); color: var(--dim);
+  .flag.txt { align-items: center; justify-content: center; background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--dim);
     font: 700 10px var(--mono); }
+  .flag.globe { box-shadow: none; background: none; color: var(--dim); }
+  .flag.globe svg { width: 18px; height: 18px; margin: auto; }
   .flag.auto { box-shadow: none; color: var(--acc); }
   .flag.auto svg { width: 18px; height: 18px; margin: auto; }
   .row-node[data-current] .flag:not(.auto) { box-shadow: 0 0 0 2px var(--acc); }
@@ -657,40 +659,47 @@
   .rows .sub { font-size: 12px; color: var(--dim); }
   .rows .stack { flex-direction: column; align-items: stretch; gap: 10px; }
   .pick { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .keys { display: flex; flex-direction: column; gap: 8px; }
-  /* Ключ — строкой: значок вида, имя и адрес, справа дело. Фон — едва светлее
-     карточки: на чёрной плашке --shade строки выглядели дырами. */
+  .keys { display: flex; flex-direction: column; gap: 6px; }
+  /* Ключи — список выбора: вся строка — кнопка «сделать рабочим», справа
+     кружок, у рабочего он залит. Отдельные «Использовать» и «Рабочий» были
+     двумя способами сказать одно и спорили с самой строкой. */
   .keys .key {
-    display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 12px;
-    border-radius: min(var(--r), 12px); border: 1px solid var(--line);
-    background: color-mix(in srgb, var(--fg) 4%, transparent);
-    transition: border-color .2s, background .2s; animation: ncIn .3s var(--ease) both;
+    position: relative; display: flex; align-items: center; gap: 12px; padding: 11px 12px;
+    border-radius: min(var(--r), 12px); border: 1px solid transparent; cursor: pointer; text-align: left;
+    background: color-mix(in srgb, var(--fg) 4%, transparent); color: var(--fg); font: inherit; width: 100%;
+    transition: border-color .2s, background .2s, transform .2s var(--ease); animation: ncIn .3s var(--ease) both;
   }
-  .keys .key:hover { border-color: color-mix(in srgb, var(--acc) 35%, var(--line)); }
-  .keys .key[data-active] { border-color: var(--acc); background: var(--accSoft); }
-  .keys .key .kbadge {
-    flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px;
-    background: color-mix(in srgb, var(--acc) 16%, transparent); color: var(--acc);
-    font: 800 14px var(--mono); letter-spacing: .02em;
+  .keys .key:hover { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+  .keys .key:active { transform: scale(.995); }
+  .keys .key[data-active] { cursor: default; border-color: var(--acc); background: var(--accSoft); }
+  .keys .key .kicon {
+    flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px;
+    background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--dim);
   }
-  .keys .key[data-active] .kbadge { background: var(--acc); color: var(--accFg, var(--bg)); }
+  .keys .key .kicon svg { width: 18px; height: 18px; }
+  .keys .key .kicon .logo { width: 20px; height: 20px; }
+  .keys .key[data-active] .kicon { background: color-mix(in srgb, var(--acc) 22%, transparent); color: var(--acc); }
   .keys .key .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .keys .key .kname { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .keys .key b { font-size: 14px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .keys .key .kwork { flex: none; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; background: var(--acc); color: var(--accFg, var(--bg)); }
   .keys .key small { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .keys .key .quota { color: var(--fg); white-space: normal; }
-  .keys .key .track { display: block; margin-top: 3px; height: 4px; }
+  .keys .key .track { display: block; margin-top: 3px; height: 4px; background: color-mix(in srgb, var(--fg) 12%, transparent); }
   .keys .key .track[hidden], .keys .key .quota[hidden] { display: none; }
-  .keys .key .kacts { flex: none; display: flex; align-items: center; gap: 6px; }
-  .keys .key .kuse { height: 28px; padding: 0 10px; font-size: 12px; }
+  .keys .key .kmark { flex: none; width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--dim); display: grid; place-items: center; transition: box-shadow .2s, background .2s; }
+  .keys .key:hover .kmark { box-shadow: inset 0 0 0 1.5px var(--acc); }
+  .keys .key[data-active] .kmark { background: var(--acc); box-shadow: none; color: var(--accFg, var(--bg)); }
+  .keys .key[data-active] .kmark svg { width: 12px; height: 12px; }
+  /* Корзина — по наведению: убирают ключ редко, а постоянная иконка на
+     каждой строке спорила бы с выбором. Клавиатурой до неё тоже дойти. */
   .keys .key .kdrop {
-    width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; border: 0; cursor: pointer;
-    background: none; color: var(--dim); transition: color .15s, background .15s;
+    flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; border: 0; cursor: pointer;
+    background: none; color: var(--dim); opacity: 0; transition: opacity .15s, color .15s, background .15s;
   }
+  .keys .key:hover .kdrop, .keys .key .kdrop:focus-visible, .keys .key .kdrop[data-sure="1"] { opacity: 1; }
   .keys .key .kdrop svg { width: 16px; height: 16px; }
   .keys .key .kdrop:hover { color: var(--fail); background: color-mix(in srgb, var(--fail) 12%, transparent); }
   .keys .key .kdrop[data-sure="1"] { width: auto; padding: 0 10px; color: var(--fail); background: color-mix(in srgb, var(--fail) 14%, transparent); font-size: 12px; font-weight: 700; }
+  @media (hover: none) { .keys .key .kdrop { opacity: 1; } }
   /* «Сейчас» — к какому серверу и почему, без абзаца пояснений. */
   .now-card .now-main { display: flex; align-items: center; gap: 12px; padding: 4px 0 2px; }
   .now-card .now-flag .flag { width: 40px; height: 28px; border-radius: 6px; }
@@ -2704,7 +2713,7 @@ const T = {
     keySave: "Сохранить", keySaveFirst: "Сохранить ключ", keySaved: "Сохранено",
     keyNameHint: "имя, необязательно", keysTitle: "Ключи", keyAdd: "+ Добавить ключ", keyAddClose: "Отмена",
     keyActive: "рабочий", keyUse: "Сделать рабочим", keyRemove: "Убрать", keyRemoveSure: "Убрать?",
-    keyWorking: "Рабочий", keyUseShort: "Использовать",
+    keyWorking: "рабочий",
     keyKinds: { marvia: "Marvia", sub: "подписка", link: "ссылка" },
     keyNoLimits: "без срока и квоты",
     keyLeftOf: (left, all) => left + " из " + all,
@@ -3030,7 +3039,7 @@ const T = {
     keySave: "Save", keySaveFirst: "Save the key", keySaved: "Saved",
     keyNameHint: "name, optional", keysTitle: "Keys", keyAdd: "+ Add a key", keyAddClose: "Cancel",
     keyActive: "active", keyUse: "Make active", keyRemove: "Remove", keyRemoveSure: "Remove?",
-    keyWorking: "Active", keyUseShort: "Use",
+    keyWorking: "active",
     keyKinds: { marvia: "Marvia", sub: "subscription", link: "link" },
     keyNoLimits: "no expiry or quota",
     keyLeftOf: (left, all) => left + " of " + all,
@@ -4091,9 +4100,14 @@ function flagEl(code) {
   const svg = flagSVG(code);
   if (svg) {
     span.innerHTML = '<svg viewBox="0 0 30 20" preserveAspectRatio="none" aria-hidden="true">' + svg + "</svg>";
-  } else {
+  } else if (code) {
     span.classList.add("txt");
-    span.textContent = code || "··";
+    span.textContent = code;
+  } else {
+    // Страну не узнать — глобус, а не «··»: две точки читались как сломанная
+    // картинка, а это просто сервер без указанной страны.
+    span.classList.add("txt", "globe");
+    span.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>';
   }
   if (code) span.title = regionName(code) || code;
   return span;
@@ -4415,7 +4429,7 @@ function render(s) {
     $("now-sub").textContent = [rest.join(" · "), s.ping_ms ? pingText : ""].filter(Boolean).join(" · ");
     $("now-flag").replaceChildren(flagEl(countryCode(s.node, "")));
   } else {
-    $("place-code").textContent = "··";
+    $("place-code").replaceChildren(flagEl(""));
     place.dataset.q = "";
     $("node-name").textContent = d.noNode;
     $("node-addr").textContent = d.noNodeSub;
@@ -5066,31 +5080,32 @@ function paintKeys() {
     const row = document.createElement("div");
     row.className = "key";
     row.style.animationDelay = (i * 40) + "ms";
+    row.setAttribute("role", k.active ? "group" : "button");
     if (k.active) row.setAttribute("data-active", "");
+    else {
+      row.tabIndex = 0;
+      row.title = d.keyUse;
+      const use = () => keyAction(row, "api/keys/use", k.id);
+      row.addEventListener("click", (e) => { if (!e.target.closest(".kdrop")) use(); });
+      row.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === row) { e.preventDefault(); use(); } });
+    }
 
-    // Значок вида: у ключа Marvia — M, у подписки и чужой ссылки — первые
-    // буквы вида. По нему ключи различаются, не читая строк.
-    const badge = document.createElement("span");
-    badge.className = "kbadge";
-    badge.textContent = k.kind === "marvia" ? "M" : (keyKind(k) || "?").slice(0, 3).toUpperCase();
+    // Значок вида: у ключа Marvia — её знак, у подписки — список, у чужой
+    // ссылки — звено. Различаются с первого взгляда, не читая подписей.
+    const icon = document.createElement("span");
+    icon.className = "kicon";
+    if (k.kind === "marvia") icon.innerHTML = '<span class="logo" aria-hidden="true"></span>';
+    else if (k.kind === "sub") icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>';
+    else icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>';
 
     const grow = document.createElement("span");
     grow.className = "grow";
-    const line = document.createElement("span");
-    line.className = "kname";
     const name = document.createElement("b");
     name.textContent = k.name;
     name.title = k.name;
-    line.append(name);
-    if (k.active) {
-      const work = document.createElement("span");
-      work.className = "kwork";
-      work.textContent = d.keyWorking;
-      line.append(work);
-    }
     const kind = document.createElement("small");
-    kind.textContent = [keyKind(k), k.host && k.host !== k.name ? k.host : ""].filter(Boolean).join(" · ");
-    grow.append(line, kind);
+    kind.textContent = [k.active ? d.keyWorking : "", keyKind(k), k.host && k.host !== k.name ? k.host : ""].filter(Boolean).join(" · ");
+    grow.append(name, kind);
     if (k.active) {
       const quota = document.createElement("small");
       quota.className = "quota";
@@ -5100,17 +5115,6 @@ function paintKeys() {
       grow.append(quota, track);
     }
 
-    const acts = document.createElement("span");
-    acts.className = "kacts";
-    if (!k.active) {
-      const use = document.createElement("button");
-      use.type = "button";
-      use.className = "chip kuse";
-      use.textContent = d.keyUseShort;
-      use.title = d.keyUse;
-      use.addEventListener("click", () => keyAction(use, "api/keys/use", k.id));
-      acts.append(use);
-    }
     // Убрать — в два нажатия: ссылки может уже не быть под рукой, и
     // промах мышью не должен стоить ключа.
     const drop = document.createElement("button");
@@ -5120,7 +5124,8 @@ function paintKeys() {
     drop.setAttribute("aria-label", d.keyRemove);
     const trash = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
     drop.innerHTML = trash;
-    drop.addEventListener("click", () => {
+    drop.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (drop.dataset.sure !== "1") {
         drop.dataset.sure = "1";
         drop.textContent = L().keyRemoveSure;
@@ -5129,8 +5134,13 @@ function paintKeys() {
       }
       keyAction(drop, "api/keys/remove", k.id);
     });
-    acts.append(drop);
-    row.append(badge, grow, acts);
+
+    const mark = document.createElement("span");
+    mark.className = "kmark";
+    mark.setAttribute("aria-hidden", "true");
+    if (k.active) mark.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>';
+
+    row.append(icon, grow, drop, mark);
     return row;
   }));
   paintKeyQuota(lastStatus);

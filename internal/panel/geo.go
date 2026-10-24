@@ -99,9 +99,19 @@ func countryOfAddress(ctx context.Context, address string) (string, error) {
 	return strings.ToUpper(code), nil
 }
 
-// fillCountry подставляет ноде страну по адресу, если страны у неё нет.
-// Фоном: установщик и сверка ноды не должны ждать чужую базу.
-func (a *API) fillCountry(id int64, address string) {
+// countryUnknown — страны нет или записано то, в чём страну не узнать
+// («Пиюсн», опечатка): флага по такому слову не нарисует ни панель, ни
+// приложения, и покупатель видит «··» вместо флага. Такое слово панель
+// заменяет страной по адресу; узнаваемую страну, вписанную руками, не трогает
+// никогда.
+func countryUnknown(country string) bool {
+	return countryCodeOf(country) == ""
+}
+
+// fillCountry подставляет ноде страну по адресу, если её страну не узнать.
+// Фоном: установщик и сверка ноды не должны ждать чужую базу. was — что
+// стоит сейчас: пишем, только если за время запроса продавец не вписал своё.
+func (a *API) fillCountry(id int64, was, address string) {
 	if !a.geo.claim(id) {
 		return
 	}
@@ -112,7 +122,7 @@ func (a *API) fillCountry(id int64, address string) {
 		if err != nil {
 			return
 		}
-		if err := a.store.SetCountryIfEmpty(ctx, id, country); err != nil {
+		if err := a.store.SetCountryIfStill(ctx, id, was, country); err != nil {
 			log.Printf("страна ноды %d не записалась: %v", id, err)
 		}
 	}()
@@ -139,10 +149,10 @@ func (g *geoTries) claim(id int64) bool {
 	return true
 }
 
-// SetCountryIfEmpty пишет страну, только если продавец её не задал: к
-// моменту ответа базы он мог вписать свою.
-func (s *Store) SetCountryIfEmpty(ctx context.Context, id int64, country string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE nodes SET country = ? WHERE id = ? AND country = ''`, country, id)
+// SetCountryIfStill пишет страну, только если в записи всё ещё was: к
+// моменту ответа базы продавец мог вписать свою.
+func (s *Store) SetCountryIfStill(ctx context.Context, id int64, was, country string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE nodes SET country = ? WHERE id = ? AND country = ?`, country, id, was)
 	return err
 }
 

@@ -100,3 +100,40 @@ func TestCountryCodesWrittenBeforeAreNamedOnRestart(t *testing.T) {
 		t.Fatalf("после перезапуска страна %q, %v", got.Country, err)
 	}
 }
+
+// TestUnrecognisedCountryIsReplacedByTheAddressCountry: слово, в котором
+// страну не узнать («Пиюсн»), панель заменяет страной по адресу — иначе у
+// ноды вместо флага «··». Узнаваемая страна, вписанная руками, остаётся.
+func TestUnrecognisedCountryIsReplacedByTheAddressCountry(t *testing.T) {
+	defer panel.SetGeoLookup(func(context.Context, string) (string, error) { return "nl", nil })()
+	h := newHarness(t)
+	weird := h.createNode("marvia-185")
+	h.do(http.MethodPatch, "/api/v1/nodes/"+itoa(weird.Node.ID), adminToken, map[string]any{"country": "Пиюсн"}, nil)
+	kept := h.createNode("fi-1")
+	h.do(http.MethodPatch, "/api/v1/nodes/"+itoa(kept.Node.ID), adminToken, map[string]any{"country": "Финляндия"}, nil)
+	h.do(http.MethodPost, "/api/v1/node/usage", weird.Token, map[string]any{"usage": map[string]any{}}, nil)
+	h.do(http.MethodPost, "/api/v1/node/usage", kept.Token, map[string]any{"usage": map[string]any{}}, nil)
+
+	country := func(id int64) string {
+		var out struct {
+			Nodes []panel.Node `json:"nodes"`
+		}
+		h.do(http.MethodGet, "/api/v1/nodes", adminToken, nil, &out)
+		for _, n := range out.Nodes {
+			if n.ID == id {
+				return n.Country
+			}
+		}
+		return ""
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for country(weird.Node.ID) == "Пиюсн" && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got := country(weird.Node.ID); got != "Нидерланды" {
+		t.Fatalf("неузнаваемая страна осталась: %q", got)
+	}
+	if got := country(kept.Node.ID); got != "Финляндия" {
+		t.Fatalf("страну продавца заменили: %q", got)
+	}
+}

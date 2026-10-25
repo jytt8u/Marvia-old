@@ -45,7 +45,7 @@ ShowUninstDetails show
 
 Function .onInit
   ${IfNot} ${IsNativeAMD64}
-    MessageBox MB_ICONSTOP /SD IDOK "Этот комплект предназначен для Windows x64."
+    MessageBox MB_ICONSTOP "Этот комплект предназначен для Windows x64." /SD IDOK
     SetErrorLevel 2
     Quit
   ${EndIf}
@@ -53,7 +53,7 @@ Function .onInit
   !ifndef TEST_INSTALL
     FindWindow $0 "MarviaTray"
     ${If} $0 != 0
-      MessageBox MB_ICONINFORMATION /SD IDOK "Marvia сейчас работает. Выберите «Выйти» в трее и запустите установщик снова."
+      MessageBox MB_ICONINFORMATION "Marvia сейчас работает. Выберите «Выйти» в трее и запустите установщик снова." /SD IDOK
       SetErrorLevel 2
       Quit
     ${EndIf}
@@ -89,7 +89,7 @@ Function un.onInit
   !ifndef TEST_INSTALL
     FindWindow $0 "MarviaTray"
     ${If} $0 != 0
-      MessageBox MB_ICONINFORMATION /SD IDOK "Сначала завершите Marvia через «Выйти» в трее."
+      MessageBox MB_ICONINFORMATION "Сначала завершите Marvia через «Выйти» в трее." /SD IDOK
       SetErrorLevel 2
       Quit
     ${EndIf}

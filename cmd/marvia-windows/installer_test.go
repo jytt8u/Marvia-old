@@ -2,9 +2,12 @@ package main
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
+
+var messageBoxWithDefault = regexp.MustCompile(`MessageBox [A-Z_|]+ "[^"]*" /SD ID[A-Z]+`)
 
 func readRepoFile(t *testing.T, path string) string {
 	t.Helper()
@@ -26,7 +29,10 @@ func TestSilentInstallNeverStopsOnAQuestion(t *testing.T) {
 			continue
 		}
 		found++
-		if !strings.Contains(line, "/SD ") {
+		// /SD — после текста окна: NSIS читает его как необязательный
+		// хвост, а поставленный раньше принимает за текст, и установщик
+		// не собирается вовсе.
+		if !messageBoxWithDefault.MatchString(line) {
 			t.Errorf("окно без ответа для тихой установки: %s", strings.TrimSpace(line))
 		}
 	}

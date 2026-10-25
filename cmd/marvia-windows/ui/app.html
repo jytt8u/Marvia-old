@@ -1444,6 +1444,12 @@
   .own-ico { font-style: normal; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; margin-bottom: 4px;
     background: rgba(var(--accRgb), .14); color: var(--acc); font-size: 16px; }
   @media (max-width: 900px) { .own-row { grid-template-columns: 1fr; } }
+  /* Свой файл фоном закрывает и образ, и обои стола: пока он стоит, кнопка
+     «Убрать» — здесь, на виду, а не в глубине точной настройки. Иначе
+     человек перебирает образы, а фон не меняется. */
+  .own-now { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 10px 10px 14px;
+    border-radius: var(--r); background: var(--surf); border: 1px solid var(--acc); font-size: 13px; }
+  .own-now[hidden] { display: none; }
 
   /* ───── Миниатюры: обои и маленькое окно образа ───── */
   .vibes { grid-auto-columns: 226px; }
@@ -2051,6 +2057,7 @@
               <button type="button" class="own-tile" id="own-file"><i class="own-ico">▶</i><b data-t="ownFile"></b><small data-t="ownFileSub"></small></button>
               <button type="button" class="own-tile" id="own-fine"><i class="own-ico">⚙</i><b data-t="ownFine"></b><small data-t="ownFineSub"></small></button>
             </div>
+            <div class="own-now" id="own-now" hidden><span data-t="ownNow"></span><button type="button" class="pillb" id="own-drop" data-t="ownDrop"></button></div>
           </div>
 
           <!-- Вид окна — отдельно от образа: образ красит, вид расставляет. -->
@@ -2575,6 +2582,7 @@ const T = {
     ownTitle: "Сделайте окно своим", ownSub: "всё здесь меняется под вас — от обоев до шрифта",
     ownDesk: "Мои обои под окном", ownDeskSub: "окно покажет ваш рабочий стол",
     ownFile: "Своя картинка или видео", ownFileSub: "любой файл фоном за всем окном",
+    ownNow: "Фоном стоит ваш файл", ownDrop: "Убрать",
     ownFine: "Точная настройка", ownFineSub: "цвета, шрифты, форма, узор — поле за полем",
     vibeTitle: "Образ", vibeHint: "в духе Windows, macOS и Linux — и наши",
     fineShow: "Открыть точную настройку", fineHide: "Скрыть точную настройку",
@@ -2901,6 +2909,7 @@ const T = {
     ownTitle: "Make the window yours", ownSub: "everything here bends to you — from wallpaper to typeface",
     ownDesk: "My wallpaper under the window", ownDeskSub: "the window shows your desktop",
     ownFile: "Your own image or video", ownFileSub: "any file behind the whole window",
+    ownNow: "Your file is the background", ownDrop: "Remove",
     ownFine: "Fine-tuning", ownFineSub: "colours, fonts, shape, pattern — field by field",
     vibeTitle: "Vibe", vibeHint: "after Windows, macOS and Linux — plus our own",
     fineShow: "Open fine-tuning", fineHide: "Hide fine-tuning",
@@ -3389,6 +3398,7 @@ function paintBackdrop() {
   const layer = $("bg-layer"), veil = $("bg-veil");
   const on = !!backdropURL;
   document.body.classList.toggle("custom-bg", on);
+  $("own-now").hidden = !on;
   // Свой фон закрывает рабочий стол — прозрачность тогда не нужна.
   if (vibe) paintGlass();
   layer.hidden = !on;
@@ -3466,7 +3476,9 @@ async function loadBackdropFile() {
 on("bg-pick", "click", () => $("bg-file").click());
 // «Сделайте окно своим»: обои стола — это образ «Прозрачная»; картинка или
 // видео — тот же выбор файла, что в точной настройке; третья открывает её.
-on("own-desk", "click", () => chooseVibe("clear"));
+// Свой файл закрыл бы обои стола, и нажатие ничего бы не изменило:
+// человек просит обои — свой фон уходит.
+on("own-desk", "click", async () => { await dropBackdrop(); chooseVibe("clear"); });
 on("own-file", "click", () => $("bg-file").click());
 on("own-fine", "click", () => {
   const page = document.querySelector('.page[data-tab="theme"]');
@@ -3488,11 +3500,14 @@ on("bg-file", "change", async (e) => {
   say("");
   useBackdropFile(file);
 });
-on("bg-drop", "click", async () => {
+async function dropBackdrop() {
+  if (!backdropURL) return;
   try { await Look.dropBackdropFile(); } catch (_) { /* его там и не было */ }
   $("bg-bad").hidden = true;
   useBackdropFile(null);
-});
+}
+on("bg-drop", "click", dropBackdrop);
+on("own-drop", "click", dropBackdrop);
 on("bg-dim", "input", (e) => {
   setBackdrop({ dim: Number(e.target.value) / 100 });
   $("bg-dim-note").textContent = e.target.value + "%";

@@ -29,9 +29,11 @@ import androidx.lifecycle.repeatOnLifecycle
 import io.marvia.android.databinding.ActivityMainBinding
 import io.marvia.android.databinding.ScreenConnectBinding
 import io.marvia.mobile.Mobile
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * MainActivity — все экраны приложения.
@@ -196,6 +198,12 @@ class MainActivity : AppCompatActivity() {
             onReset = { resetAll() },
             onAppearanceChanged = { repaint() },
             onTheme = { show(Screen.THEME) },
+            onConnect = {
+                val state = MarviaState.state.value
+                if (state !is TunnelState.On && state !is TunnelState.Connecting) toggle()
+            },
+            onReconnect = { reconnect() },
+            onServers = { show(Screen.SERVERS) },
         )
 
         lifecycleScope.launch {
@@ -413,6 +421,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun show(next: Screen) {
         val was = screen
+        if (was == Screen.MORE && next != Screen.MORE) more.hidden()
         screen = next
 
         ui.keyScreen.root.isVisible = next == Screen.KEY
@@ -1064,6 +1073,29 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    /**
+     * reconnect — «Переподключиться» из «Диагностики»: туннель заново с тем,
+     * что сейчас выбрано. Без него дробление, включённое кнопкой рядом, ждало
+     * бы, пока человек сам догадается нажать «Отключить» и «Подключить».
+     *
+     * Новую службу запускаем только после того, как прежняя разрушилась:
+     * запуск, пришедший до её onDestroy, достался бы остановленной службе, и
+     * onDestroy оборвал бы новое подключение.
+     */
+    private fun reconnect() {
+        val state = MarviaState.state.value
+        if (state !is TunnelState.On && state !is TunnelState.Connecting) {
+            toggle()
+            return
+        }
+        startService(Intent(this, MarviaVpnService::class.java).setAction(MarviaVpnService.ACTION_STOP))
+        lifecycleScope.launch {
+            withTimeoutOrNull(RECONNECT_WAIT_MS) { MarviaState.serviceAlive.first { !it } }
+            val now = MarviaState.state.value
+            if (now !is TunnelState.On && now !is TunnelState.Connecting) toggle()
+        }
+    }
+
     private fun launchService() {
         ContextCompat.startForegroundService(this, Intent(this, MarviaVpnService::class.java))
     }
@@ -1094,3 +1126,6 @@ class MainActivity : AppCompatActivity() {
         ui.keyScreen.keyInput.clearFocus()
     }
 }
+
+/** Сколько ждать, пока прежняя служба VPN разрушится, прежде чем поднять новую. */
+private const val RECONNECT_WAIT_MS = 10_000L

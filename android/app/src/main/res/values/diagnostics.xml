@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- «Диагностика»: коды шагов и кнопок приходят из ядра (mobile/diag.go),
+     слова — отсюда. Тест ядра сверяет, что у каждого кода строка есть в обоих
+     словарях. -->
+<resources>
+    <string name="diag_title">Diagnostics</string>
+    <string name="diag_row_sub">address, quality, checks, speed</string>
+    <string name="diag_sub">Step by step, from the network to the site</string>
+    <string name="diag_need_up">needs a connection</string>
+
+    <string name="diag_where_title">WHERE YOU ARE ON THE INTERNET</string>
+    <string name="diag_ip">Address</string>
+    <string name="diag_country">Country</string>
+    <string name="diag_server">Server</string>
+
+    <string name="diag_quality_title">CONNECTION QUALITY</string>
+    <string name="diag_ping">Latency</string>
+    <string name="diag_jitter">Jitter</string>
+    <string name="diag_loss">Loss</string>
+    <string name="diag_loss_value">%1$d%%</string>
+    <string name="diag_quality_wait">measuring…</string>
+    <string name="diag_protocol">Protocol</string>
+    <string name="diag_transport">Transport</string>
+    <string name="diag_sni">Cover name (SNI)</string>
+    <string name="diag_spare">%1$s +%2$d spare</string>
+    <string name="diag_fp">TLS fingerprint</string>
+
+    <string name="diag_check_title">CHECK EVERYTHING</string>
+    <string name="diag_run">Check everything</string>
+    <string name="diag_again">Check again</string>
+    <string name="diag_running">Checking…</string>
+    <string name="diag_all_ok">All good</string>
+    <string name="diag_found">Need attention: %1$d</string>
+    <string name="diag_of">%1$d of %2$d</string>
+    <string name="diag_best">best %1$d ms</string>
+    <string name="diag_hidden">hidden</string>
+
+    <string name="diag_step_net">Internet without VPN</string>
+    <string name="diag_net_bad">No connection — check Wi-Fi or mobile data.</string>
+    <string name="diag_step_dns">Name lookups (DNS)</string>
+    <string name="diag_dns_bad">Names do not resolve.</string>
+    <string name="diag_step_node">Servers answer</string>
+    <string name="diag_node_warn">A closer or livelier one is on Servers.</string>
+    <string name="diag_node_bad">None answered: the addresses are blocked or the servers are down.</string>
+    <string name="diag_node_off">No key — nothing to check.</string>
+    <string name="diag_step_tunnel">Connection</string>
+    <string name="diag_tunnel_warn">In progress…</string>
+    <string name="diag_tunnel_bad">Did not come up.</string>
+    <string name="diag_tunnel_stalled">The server stopped answering.</string>
+    <string name="diag_tunnel_off">Not connected.</string>
+    <string name="diag_step_where">You are seen as</string>
+    <string name="diag_where_bad">Could not learn the address through the tunnel.</string>
+    <string name="diag_step_leak">Your address does not leak</string>
+    <string name="diag_leak_warn">Could not compare — reconnect and check again.</string>
+    <string name="diag_leak_bad">Sites see your real address — try another server.</string>
+    <string name="diag_step_sites">Key sites</string>
+    <string name="diag_sites_warn">Some did not open — try another server.</string>
+    <string name="diag_sites_bad">None opened.</string>
+
+    <string name="diag_act_connect">Connect</string>
+    <string name="diag_act_reconnect">Reconnect</string>
+    <string name="diag_act_nodes">Change server</string>
+    <string name="diag_act_fragment">Turn on splitting</string>
+    <string name="diag_act_dns">Change DNS</string>
+
+    <string name="diag_speed_title">SPEED</string>
+    <string name="diag_speed">Speed</string>
+    <string name="diag_speed_run">Measure</string>
+    <string name="diag_speed_running">Measuring…</string>
+    <string name="diag_speed_failed">Could not measure</string>
+
+    <string name="diag_report">Copy a report for the seller</string>
+    <string name="diag_report_copied">Report copied</string>
+    <string name="diag_report_header">Marvia diagnostics</string>
+    <string name="diag_report_off">not connected</string>
+</resources>

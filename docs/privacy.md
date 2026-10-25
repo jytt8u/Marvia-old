@@ -146,6 +146,21 @@ YouTube, Telegram, WhatsApp, Instagram, ChatGPT, X, GitHub) и качает до
 настоящего адреса нет никогда: окно показывает только адрес выхода, а
 отчёт закрывает адреса.
 
+«Диагностика» на телефоне ходит туда же. Через ноду, только с поднятым
+туннелем: `cdn-cgi/trace` (адрес и страна выхода), главные страницы тех же
+восьми сайтов по «Проверить всё», до 30 МБ с `speed.cloudflare.com` по
+«Замерить» и запрос имён к резолверу из настроек — тем же путём, что у
+остальных приложений. Мимо туннеля — тоже три вещи: TCP-соединение без
+данных до 1.1.1.1 и 8.8.8.8 («интернет без VPN»), такое же до нод подписки
+(до шести; так приложение подключается к ним всегда, адреса берутся из
+кэша, панель не спрашивается) и один `cdn-cgi/trace` для шага «адрес не
+утекает». Приложение исключено из своего VPN, поэтому этот последний запрос
+Cloudflare получает с настоящего адреса телефона — иначе сравнивать не с
+чем. Адрес сравнивается в ядре и не выходит из него: ни на экран, ни в
+отчёт. Без туннеля имена для шага DNS спрашивает резолвер телефона, как и
+без Marvia. Последние пять замеров скорости хранятся в настройках
+приложения.
+
 ### На устройстве
 
 Windows хранит дневные объёмы трафика по часам локально в
@@ -314,6 +329,15 @@ which address and country the internet sees — through the node, so Cloudflare
 sees the node's address. Only when the buttons are pressed, it opens the main
 pages of a few sites and downloads up to 30 MB from `speed.cloudflare.com`,
 also through the node.
+Diagnostics on the phone does the same through the node, only while the
+tunnel is up, plus a name lookup to the chosen resolver the way other apps
+get it. Around the tunnel it makes empty TCP connections to 1.1.1.1, 8.8.8.8
+and up to six subscription nodes (from the cache, without asking the panel)
+and one `cdn-cgi/trace` request for “your address does not leak”: the app is
+excluded from its own VPN, so Cloudflare sees the phone's real address in
+that one request. The comparison happens in the core; the address never
+reaches the screen or the report. The last five speed results are kept in
+the app settings.
 
 On the device the app stores access keys and subscription URLs, node lists
 and measurements, VPN and appearance settings, apps that bypass the VPN,

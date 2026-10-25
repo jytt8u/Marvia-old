@@ -24,7 +24,7 @@ class UpdateOfferTest {
         try {
             val ui = ScreenMoreBinding.inflate(activity.layoutInflater)
             val screen = MoreScreen(activity, ui, Store(activity),
-                { Look.theme(Look.Choice()) }, {}, {}, {}, {}, {}, {})
+                { Look.theme(Look.Choice()) }, {}, {}, {}, {}, {}, {}, {}, {}, {})
             val url = "https://panel.example.test/sub/test/app/android"
             screen.showUpdate(TunnelState.Subscription(
                 updateVersion = "0.13.0-alpha.6", updateUrl = url))

@@ -92,6 +92,14 @@ object MarviaState {
 
     val state: StateFlow<TunnelState> = current.asStateFlow()
 
+    /**
+     * serviceAlive — существует ли объект службы VPN. «Переподключиться»
+     * ждёт, пока прежний разрушится: запуск, пришедший раньше его onDestroy,
+     * достался бы уже остановленной службе, и onDestroy оборвал бы новое
+     * подключение на полуслове.
+     */
+    val serviceAlive = MutableStateFlow(false)
+
     fun set(next: TunnelState) {
         current.value = next
         if (next !is TunnelState.On) traffic.value = traffic.value.copy(seconds = 0, bytesPerSecond = 0.0)

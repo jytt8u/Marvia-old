@@ -102,5 +102,6 @@ func (t *Tunnel) Attach(tunFD int, dns string) error {
 		return fail(FailSystem, fmt.Errorf("сетевой мост: %w", err))
 	}
 	t.bridge = bridge
+	t.dns = dns
 	return nil
 }

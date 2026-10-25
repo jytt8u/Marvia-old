@@ -66,9 +66,13 @@ class MoreScreen(
     private val onReset: () -> Unit,
     private val onAppearanceChanged: () -> Unit,
     private val onTheme: () -> Unit,
+    /** «Диагностика»: подключиться, переподключиться, открыть «Серверы». */
+    private val onConnect: () -> Unit,
+    private val onReconnect: () -> Unit,
+    private val onServers: () -> Unit,
 ) {
 
-    enum class Section { CONN, ADVANCED, APPS, LOGS, ABOUT }
+    enum class Section { CONN, ADVANCED, APPS, LOGS, ABOUT, DIAG }
 
     private var section = Section.CONN
 
@@ -84,6 +88,17 @@ class MoreScreen(
     private val appearance by lazy {
         AppearanceSettings(host, ui.appearanceRows, store, theme, onAppearanceChanged)
     }
+    private val diagnostics by lazy {
+        DiagnosticsScreen(
+            host, ui.sectionDiag, ui.diagRows, store, theme, version,
+            DiagnosticsScreen.Actions(
+                connect = onConnect,
+                reconnect = onReconnect,
+                servers = onServers,
+                chooseDns = { chooseDns() },
+            ),
+        )
+    }
 
     private val version: String = try {
         host.packageManager.getPackageInfo(host.packageName, 0).versionName.orEmpty()
@@ -98,6 +113,7 @@ class MoreScreen(
         ui.moreBack.setOnClickListener { show(Section.CONN) }
         ui.rowApps.setOnClickListener { show(Section.APPS) }
         ui.rowLogs.setOnClickListener { show(Section.LOGS) }
+        ui.rowDiag.setOnClickListener { show(Section.DIAG) }
         ui.rowTheme.setOnClickListener { onTheme() }
 
         wireConnection()
@@ -119,6 +135,7 @@ class MoreScreen(
         paintModes()
         renderConnection()
         if (section == Section.ADVANCED) advanced.render()
+        if (section == Section.DIAG) diagnostics.render()
         ui.searchBox.background = Paint.rounded(t.surf, minOf(t.r, 12), dp)
         ui.appList.background = Paint.rounded(t.surf, t.r, dp)
         ui.appsSpinner.indeterminateTintList = ColorStateList.valueOf(t.acc)
@@ -129,6 +146,11 @@ class MoreScreen(
     }
 
     fun openLogs() { section = Section.LOGS }
+
+    /** Экран настроек ушёл с глаз: «Диагностика» обрывает то, что ещё идёт. */
+    fun hidden() {
+        if (section == Section.DIAG) diagnostics.close()
+    }
 
     /** Подсказка внутри экрана вместо системного Toast поверх навигации. */
     fun showPendingConnectionChange() {
@@ -155,6 +177,9 @@ class MoreScreen(
     }
 
     private fun show(next: Section) {
+        // Уходя из «Диагностики», обрываем то, что там ещё идёт: замер
+        // скорости не должен докачивать мегабайты продавца в пустоту.
+        if (section == Section.DIAG && next != Section.DIAG) diagnostics.close()
         section = next
         val state = MarviaState.state.value
         if (state !is TunnelState.On && state !is TunnelState.Connecting) ui.pendingConnectionNotice.isVisible = false
@@ -163,6 +188,7 @@ class MoreScreen(
         ui.sectionApps.isVisible = next == Section.APPS
         ui.sectionLogs.isVisible = next == Section.LOGS
         ui.sectionAbout.isVisible = next == Section.ABOUT
+        ui.sectionDiag.isVisible = next == Section.DIAG
 
         ui.moreBack.isVisible = next != Section.CONN
         // Подэкран — заголовок помельче: «Прокси по приложениям» в 26 не влезает.
@@ -174,6 +200,7 @@ class MoreScreen(
                 Section.APPS -> R.string.more_apps_card
                 Section.LOGS -> R.string.more_logs_row
                 Section.ABOUT -> R.string.settings_about
+                Section.DIAG -> R.string.diag_title
             },
         )
         ui.moreSub.text = when (next) {
@@ -182,6 +209,7 @@ class MoreScreen(
             Section.APPS -> appsSummary()
             Section.LOGS -> logsSub()
             Section.ABOUT -> host.getString(R.string.about_intro)
+            Section.DIAG -> host.getString(R.string.diag_sub)
         }
 
         when (next) {
@@ -190,6 +218,7 @@ class MoreScreen(
             Section.APPS -> openApps()
             Section.LOGS -> renderLogs()
             Section.ABOUT -> ui.aboutVersion.text = host.getString(R.string.about_version, version)
+            Section.DIAG -> diagnostics.open()
         }
     }
 

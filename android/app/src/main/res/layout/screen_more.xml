@@ -223,6 +223,17 @@
             android:orientation="vertical" android:layout_marginTop="18dp" />
         <TextView style="@style/ThemeK" android:layout_marginTop="18dp" android:layout_marginStart="4dp" android:text="@string/more_group_app" />
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_card" android:orientation="vertical" android:tag="card">
+            <LinearLayout android:id="@+id/rowDiag" style="@style/VeilRow">
+                <FrameLayout android:layout_width="34dp" android:layout_height="34dp" android:layout_marginEnd="12dp" android:tag="icon.box">
+                    <ImageView android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="center" android:contentDescription="@null" android:src="@drawable/ic_gauge" android:tag="icon:acc" />
+                </FrameLayout>
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                    <TextView style="@style/VeilRowTitle" android:text="@string/diag_title" />
+                    <TextView style="@style/VeilRowSub" android:layout_marginTop="2dp" android:text="@string/diag_row_sub" />
+                </LinearLayout>
+                <ImageView android:layout_width="18dp" android:layout_height="18dp" android:layout_marginStart="8dp" android:contentDescription="@null" android:src="@drawable/ic_chevron_right" android:tag="icon:dim" />
+            </LinearLayout>
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:tag="line" />
             <LinearLayout android:id="@+id/rowUpdate" style="@style/VeilRow" android:visibility="gone">
                 <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
                     <TextView style="@style/VeilRowTitle" android:id="@+id/updateTitle" />
@@ -273,6 +284,23 @@
                 android:orientation="vertical"
                 android:paddingHorizontal="16dp"
                 android:paddingTop="4dp"
+                android:paddingBottom="28dp" />
+        </ScrollView>
+
+        <!-- ═══════════════════════════════════════ Диагностика: строки собирает DiagnosticsScreen -->
+        <ScrollView
+            android:id="@+id/sectionDiag"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:visibility="gone">
+            <LinearLayout
+                android:id="@+id/diagRows"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="0dp"
                 android:paddingBottom="28dp" />
         </ScrollView>
 

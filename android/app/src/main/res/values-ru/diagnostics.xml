@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="diag_title">Диагностика</string>
+    <string name="diag_row_sub">адрес, качество, проверка, скорость</string>
+    <string name="diag_sub">По шагам, от сети до сайта</string>
+    <string name="diag_need_up">нужно подключение</string>
+
+    <string name="diag_where_title">ГДЕ ТЫ В ИНТЕРНЕТЕ</string>
+    <string name="diag_ip">Адрес</string>
+    <string name="diag_country">Страна</string>
+    <string name="diag_server">Сервер</string>
+
+    <string name="diag_quality_title">КАЧЕСТВО СВЯЗИ</string>
+    <string name="diag_ping">Отклик</string>
+    <string name="diag_jitter">Джиттер</string>
+    <string name="diag_loss">Потери</string>
+    <string name="diag_loss_value">%1$d%%</string>
+    <string name="diag_quality_wait">замеряю…</string>
+    <string name="diag_protocol">Протокол</string>
+    <string name="diag_transport">Транспорт</string>
+    <string name="diag_sni">Имя прикрытия (SNI)</string>
+    <string name="diag_spare">%1$s +%2$d запасных</string>
+    <string name="diag_fp">Отпечаток TLS</string>
+
+    <string name="diag_check_title">ПРОВЕРИТЬ ВСЁ</string>
+    <string name="diag_run">Проверить всё</string>
+    <string name="diag_again">Проверить ещё раз</string>
+    <string name="diag_running">Проверяю…</string>
+    <string name="diag_all_ok">Всё в порядке</string>
+    <string name="diag_found">Требуют внимания: %1$d</string>
+    <string name="diag_of">%1$d из %2$d</string>
+    <string name="diag_best">лучший %1$d мс</string>
+    <string name="diag_hidden">скрыт</string>
+
+    <string name="diag_step_net">Интернет без VPN</string>
+    <string name="diag_net_bad">Нет связи — проверь Wi-Fi или мобильные данные.</string>
+    <string name="diag_step_dns">Запросы имён (DNS)</string>
+    <string name="diag_dns_bad">Имена не отвечают.</string>
+    <string name="diag_step_node">Серверы отвечают</string>
+    <string name="diag_node_warn">Есть ближе или живее — на «Серверах».</string>
+    <string name="diag_node_bad">Ни один не ответил: адреса закрыты или серверы лежат.</string>
+    <string name="diag_node_off">Нет ключа — проверять нечего.</string>
+    <string name="diag_step_tunnel">Подключение</string>
+    <string name="diag_tunnel_warn">Идёт…</string>
+    <string name="diag_tunnel_bad">Не поднялось.</string>
+    <string name="diag_tunnel_stalled">Сервер перестал отвечать.</string>
+    <string name="diag_tunnel_off">Не подключено.</string>
+    <string name="diag_step_where">Тебя видят как</string>
+    <string name="diag_where_bad">Адрес через туннель не узнать.</string>
+    <string name="diag_step_leak">Адрес не утекает</string>
+    <string name="diag_leak_warn">Не удалось сравнить — переподключись и проверь ещё раз.</string>
+    <string name="diag_leak_bad">Сайты видят твой настоящий адрес — попробуй другой сервер.</string>
+    <string name="diag_step_sites">Главные сайты</string>
+    <string name="diag_sites_warn">Часть не открылась — попробуй другой сервер.</string>
+    <string name="diag_sites_bad">Не открылся ни один.</string>
+
+    <string name="diag_act_connect">Подключиться</string>
+    <string name="diag_act_reconnect">Переподключиться</string>
+    <string name="diag_act_nodes">Сменить сервер</string>
+    <string name="diag_act_fragment">Включить дробление</string>
+    <string name="diag_act_dns">Сменить DNS</string>
+
+    <string name="diag_speed_title">СКОРОСТЬ</string>
+    <string name="diag_speed">Скорость</string>
+    <string name="diag_speed_run">Замерить</string>
+    <string name="diag_speed_running">Замеряю…</string>
+    <string name="diag_speed_failed">Не удалось замерить</string>
+
+    <string name="diag_report">Скопировать отчёт продавцу</string>
+    <string name="diag_report_copied">Отчёт скопирован</string>
+    <string name="diag_report_header">Диагностика Marvia</string>
+    <string name="diag_report_off">не подключено</string>
+</resources>

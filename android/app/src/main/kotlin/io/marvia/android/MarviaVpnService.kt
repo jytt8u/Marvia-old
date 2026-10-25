@@ -559,10 +559,16 @@ class MarviaVpnService : VpnService() {
         shutdown(TunnelState.Off)
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        MarviaState.serviceAlive.value = true
+    }
+
     override fun onDestroy() {
         shutdown(TunnelState.Off)
         scope.cancel()
         super.onDestroy()
+        MarviaState.serviceAlive.value = false
     }
 
     /** Когда туннель поднялся: от этой отметки уведомление ведёт часы сессии. */

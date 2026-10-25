@@ -137,6 +137,14 @@ type Tunnel struct {
 	// живёт ровно столько, сколько поднят туннель, и хранить в нём историю
 	// было бы обещанием, которого оно не выполнит.
 	up, down atomic.Int64
+
+	// quality — последние замеры отклика текущей ноды; см. quality.go.
+	// whereCache — адрес выхода через туннель, до смены ноды; см. where.
+	// dns — резолвер, отданный мосту: шаг DNS в «Диагностике» спрашивает
+	// его тем же путём, что и приложения в туннеле.
+	quality    qualityRing
+	whereCache whereView
+	dns        string
 }
 
 // Start поднимает туннель поверх сетевого интерфейса, полученного от системы.
@@ -283,6 +291,10 @@ func (t *Tunnel) switched(n client.Node) {
 	t.nodeName = n.Title()
 	t.lastError = ""
 	t.troubleCode = ""
+	// Отклик и адрес выхода принадлежат прежней ноде: смешать их с новой
+	// значило бы показать человеку джиттер и страну, которых у него нет.
+	t.quality.reset()
+	t.whereCache = whereView{}
 	bridge := t.bridge
 	t.mu.Unlock()
 
@@ -498,10 +510,18 @@ func (t *Tunnel) Ping() int64 {
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
 	rtt, err := dialer.Ping(ctx)
-	if err != nil || rtt <= 0 {
-		return 0
+	ms := int64(0)
+	if err == nil && rtt > 0 {
+		ms = max(1, rtt.Milliseconds())
 	}
-	return max(1, rtt.Milliseconds())
+	// Неответ тоже замер: из них складываются потери в «Качестве связи».
+	// Пишем, только если нода всё та же — замер прежней не про текущую.
+	t.mu.Lock()
+	if t.dialer == dialer {
+		t.quality.add(ms)
+	}
+	t.mu.Unlock()
+	return ms
 }
 
 // pingTimeout — дольше не ждём: отклик в три секунды человеку уже всё равно

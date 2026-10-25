@@ -288,6 +288,15 @@ class Store(context: Context) {
         get() = prefs.getInt(KEY_PING_INTERVAL, 30).takeIf { it in PING_INTERVAL_CHOICES } ?: 30
         set(value) { prefs.edit().putInt(KEY_PING_INTERVAL, value.takeIf { it in PING_INTERVAL_CHOICES } ?: 30).apply() }
 
+    /**
+     * Последние замеры скорости из «Диагностики», новые первыми. Живут в
+     * настройках, а не в ядре: ядро живёт, пока поднят туннель, а «вчера было
+     * 80, сегодня 8» нужно помнить между подключениями.
+     */
+    var speedHistory: List<Diagnostics.SpeedHistory.Record>
+        get() = Diagnostics.SpeedHistory.decode(prefs.getString(KEY_SPEED_HISTORY, "").orEmpty())
+        set(value) { prefs.edit().putString(KEY_SPEED_HISTORY, Diagnostics.SpeedHistory.encode(value)).apply() }
+
     /** true помечает VPN лимитной сетью; false наследует признак от исходной сети. */
     var meteredVpn: Boolean
         get() = prefs.getBoolean(KEY_METERED_VPN, false)
@@ -818,6 +827,7 @@ class Store(context: Context) {
         private const val KEY_LIVE_REFRESH = "live_refresh_seconds"
         private const val KEY_IDLE_REFRESH = "idle_refresh_seconds"
         private const val KEY_PING_INTERVAL = "ping_interval_seconds"
+        private const val KEY_SPEED_HISTORY = "speed_history"
         private const val KEY_METERED_VPN = "metered_vpn"
         private const val KEY_SEND_NODE_REPORTS = "send_node_reports"
         private const val KEY_COMPACT_NOTIFICATION = "compact_notification"

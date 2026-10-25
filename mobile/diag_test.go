@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -240,13 +241,19 @@ func TestTunnelChecksNeverGoAroundTheTunnel(t *testing.T) {
 		return &http.Client{}
 	})()
 
-	var hosts []string
+	// Сайты проверяются разом, и дозвоны идут из нескольких горутин.
+	var (
+		mu    sync.Mutex
+		hosts []string
+	)
 	backend := &diagBackend{}
 	backend.dial = func(ctx context.Context, target vp1.Address) (net.Conn, error) {
 		if target.Type != vp1.AtypDomain {
 			t.Errorf("имя %v разрешилось на телефоне, а не у ноды", target)
 		}
+		mu.Lock()
 		hosts = append(hosts, target.Host)
+		mu.Unlock()
 		return toServer(server)(ctx, target)
 	}
 	tunnel := &Tunnel{dialer: backend, running: true}
@@ -266,6 +273,8 @@ func TestTunnelChecksNeverGoAroundTheTunnel(t *testing.T) {
 	if tunnel.down.Load() < int64(len(body)) {
 		t.Fatal("замер скорости не учтён в трафике сессии")
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	if !slices.Contains(hosts, "where.invalid") || !slices.Contains(hosts, "web.telegram.org") {
 		t.Fatalf("через туннель ушли не те имена: %v", hosts)
 	}

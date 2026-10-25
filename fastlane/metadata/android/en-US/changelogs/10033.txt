@@ -1,0 +1,3 @@
+0.13.0-alpha.29 — test release.
+The phone app gets Diagnostics in settings: where you appear online, connection quality, a step-by-step check and speed.
+The VP1 wire format is unchanged.

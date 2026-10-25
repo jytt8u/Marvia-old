@@ -107,7 +107,7 @@ VP1 is not compatible with WireGuard or Xray clients.
 
 | Client | Server |
 |---|---|
-| Android: Marvia and third-party keys, node selection, usage and VPN settings, a choice of home screen, from a single button to country and subscription cards, apps and your own addresses outside the tunnel, name lookups over HTTPS hidden from the node, seller's Renew and Support | Panel and nodes: limits, accounting, plans and two-click renewal, an overview of who runs out soon and traffic by node, QR code and Telegram text, backups, bot API, migration from Marzban and 3x-ui; support and renew links and an announcement in the subscription for Happ, v2RayTun, Hiddify |
+| Android: Marvia and third-party keys, node selection, usage and VPN settings, a choice of home screen, from a single button to country and subscription cards, apps and your own addresses outside the tunnel, name lookups over HTTPS hidden from the node, seller's Renew and Support | Panel and nodes: limits, accounting, plans with monthly traffic resets and two-click renewal, an overview of who runs out soon and traffic by node, QR code and Telegram text, backups, bot API, migration from Marzban and 3x-ui; support and renew links and an announcement in the subscription for Happ, v2RayTun, Hiddify |
 | Windows: TUN client, Russian sites and home network directly, DNS choice and encrypted name lookups, split TLS hello, several keys, weekly and monthly traffic, custom MTU, works alongside zapret and GoodbyeDPI, clears interference for the connection by itself (WARP, an abandoned proxy) and checks that sites open, a status and promises overview in settings, IPv6 and reports switches, seller's Support and Renew | VP1, VLESS and Trojan; verified node updates; an entry in Russia — a cascade through a Russian cloud for whitelist regimes |
 
 Manually selected nodes connect without waiting for measurements of every
@@ -122,7 +122,7 @@ other node. If the selected node is unavailable, the client checks fallbacks.
 | [Remnawave](https://docs.rw/) | Xray panel and nodes | Mihomo/sing-box templates, device controls |
 | [3x-ui](https://docs.sanaei.dev/docs/) | Xray panel | Broad protocol and administration support |
 
-Marvia still lacks automatic monthly quota resets. Buyers move from Marzban and 3x-ui with their existing keys and
+Marvia resets quotas monthly by plan; daily, weekly and yearly resets, as in Marzban, are not there yet. Buyers move from Marzban and 3x-ui with their existing keys and
 subscription addresses — [what changes on the way (Russian)](docs/guide.md#переезд-с-marzban-и-3x-ui). The linked project documentation
 supports the feature comparison; no matched speed ranking is available.
 
@@ -199,7 +199,7 @@ client in the panel. [Full guide (Russian)](docs/guide.md) · [Bot API](docs/bot
 
 - Google Play: physical-device verification, declarations
   and testing. [Publication plan (Russian)](docs/google-play.md).
-- Monthly quota resets. Migration from Marzban and 3x-ui does not carry over VMess,
+- Daily, weekly and yearly quota resets — monthly only for now. Migration from Marzban and 3x-ui does not carry over VMess,
   Shadowsocks, Vision links, or MySQL and PostgreSQL databases.
 - iOS, importing Clash/sing-box subscriptions in our apps, TUIC, Shadowsocks plugins, and per-device
   revocation when a key is shared.

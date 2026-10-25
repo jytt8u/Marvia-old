@@ -44,6 +44,10 @@ type Plan struct {
 	// считает: денег у проекта нет и не будет (см. README).
 	Note string `json:"note,omitempty"`
 
+	// TrafficReset — когда расход начинается заново внутри срока: "" —
+	// только при продлении, "month" — каждый месяц от дня покупки (reset.go).
+	TrafficReset string `json:"traffic_reset,omitempty"`
+
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -55,6 +59,7 @@ type PlanParams struct {
 	MaxIPs       int    `json:"max_ips"`
 	SpeedLimit   int64  `json:"speed_limit"`
 	Note         string `json:"note"`
+	TrafficReset string `json:"traffic_reset"`
 }
 
 func (p *PlanParams) check() error {
@@ -73,6 +78,8 @@ func (p *PlanParams) check() error {
 		return errors.New("срок тарифа — от 0 (бессрочно) до 3660 дней")
 	case p.TrafficLimit < 0 || p.MaxIPs < 0 || p.SpeedLimit < 0:
 		return errors.New("лимиты тарифа не бывают отрицательными")
+	case p.TrafficReset != ResetNever && p.TrafficReset != ResetMonthly:
+		return fmt.Errorf("сброс трафика — %q или %q, а не %q", ResetNever, ResetMonthly, p.TrafficReset)
 	}
 	return nil
 }
@@ -80,7 +87,7 @@ func (p *PlanParams) check() error {
 // ListPlans — все тарифы, от коротких к длинным: так их и выбирают.
 func (s *Store) ListPlans(ctx context.Context) ([]Plan, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, name, days, traffic_limit, max_ips, speed_limit, note, created_at
+		SELECT id, name, days, traffic_limit, max_ips, speed_limit, note, traffic_reset, created_at
 		FROM plans ORDER BY CASE WHEN days = 0 THEN 1 ELSE 0 END, days, traffic_limit, id`)
 	if err != nil {
 		return nil, fmt.Errorf("чтение тарифов: %w", err)
@@ -104,7 +111,7 @@ func scanPlan(row rowScanner) (Plan, error) {
 		p       Plan
 		created string
 	)
-	if err := row.Scan(&p.ID, &p.Name, &p.Days, &p.TrafficLimit, &p.MaxIPs, &p.SpeedLimit, &p.Note, &created); err != nil {
+	if err := row.Scan(&p.ID, &p.Name, &p.Days, &p.TrafficLimit, &p.MaxIPs, &p.SpeedLimit, &p.Note, &p.TrafficReset, &created); err != nil {
 		return Plan{}, err
 	}
 	p.CreatedAt = parse(created)
@@ -122,7 +129,7 @@ type querier interface {
 
 func getPlan(ctx context.Context, q querier, id int64) (Plan, error) {
 	p, err := scanPlan(q.QueryRowContext(ctx, `
-		SELECT id, name, days, traffic_limit, max_ips, speed_limit, note, created_at
+		SELECT id, name, days, traffic_limit, max_ips, speed_limit, note, traffic_reset, created_at
 		FROM plans WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Plan{}, ErrNoSuchPlan
@@ -136,9 +143,9 @@ func (s *Store) CreatePlan(ctx context.Context, p PlanParams) (Plan, error) {
 		return Plan{}, err
 	}
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO plans (name, days, traffic_limit, max_ips, speed_limit, note, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		p.Name, p.Days, p.TrafficLimit, p.MaxIPs, p.SpeedLimit, p.Note, format(time.Now().UTC()))
+		INSERT INTO plans (name, days, traffic_limit, max_ips, speed_limit, note, traffic_reset, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.Name, p.Days, p.TrafficLimit, p.MaxIPs, p.SpeedLimit, p.Note, p.TrafficReset, format(time.Now().UTC()))
 	if err != nil {
 		return Plan{}, fmt.Errorf("создание тарифа: %w", err)
 	}
@@ -156,8 +163,8 @@ func (s *Store) UpdatePlan(ctx context.Context, id int64, p PlanParams) (Plan, e
 		return Plan{}, err
 	}
 	res, err := s.db.ExecContext(ctx, `
-		UPDATE plans SET name = ?, days = ?, traffic_limit = ?, max_ips = ?, speed_limit = ?, note = ?
-		WHERE id = ?`, p.Name, p.Days, p.TrafficLimit, p.MaxIPs, p.SpeedLimit, p.Note, id)
+		UPDATE plans SET name = ?, days = ?, traffic_limit = ?, max_ips = ?, speed_limit = ?, note = ?, traffic_reset = ?
+		WHERE id = ?`, p.Name, p.Days, p.TrafficLimit, p.MaxIPs, p.SpeedLimit, p.Note, p.TrafficReset, id)
 	if err != nil {
 		return Plan{}, fmt.Errorf("правка тарифа: %w", err)
 	}
@@ -197,6 +204,7 @@ func (s *Store) applyPlan(ctx context.Context, p *CreateUserParams, now time.Tim
 		p.ExpiresAt = &Expiry{until}
 	}
 	p.TrafficLimit, p.MaxIPs, p.SpeedLimit = plan.TrafficLimit, plan.MaxIPs, plan.SpeedLimit
+	p.trafficReset = plan.TrafficReset
 	return nil
 }
 
@@ -206,6 +214,11 @@ func (s *Store) applyPlan(ctx context.Context, p *CreateUserParams, now time.Tim
 // заранее остаток не теряет. Лимиты становятся тарифными, а расход
 // начинается заново: месяц на 50 ГБ означает 50 ГБ на этот месяц, а не
 // остаток прошлого. Бессрочный тариф снимает срок.
+//
+// Продление начинает и новый отсчёт месячных сбросов: день продления
+// становится днём, когда расход обнуляется каждый месяц. Тариф без
+// ежемесячного сброса его снимает — продлённый по «Году на 500 ГБ» не должен
+// получать по полной квоте каждый месяц по памяти о прошлом тарифе.
 func (s *Store) RenewUser(ctx context.Context, id, planID int64) (User, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -227,9 +240,11 @@ func (s *Store) RenewUser(ctx context.Context, id, planID int64) (User, error) {
 		return User{}, err
 	}
 
+	now := time.Now().UTC()
+	anchor, next := resetSchedule(plan.TrafficReset, now)
 	var expires any
 	if plan.Days > 0 {
-		base := time.Now().UTC()
+		base := now
 		if current.Valid {
 			if t := parse(current.String); t.After(base) {
 				base = t
@@ -240,9 +255,9 @@ func (s *Store) RenewUser(ctx context.Context, id, planID int64) (User, error) {
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE users SET expires_at = ?, traffic_limit = ?, max_ips = ?, speed_limit = ?, plan_id = ?,
-		       enabled = 1, traffic_offset = `+usedTotalSQL+`
+		       enabled = 1, traffic_offset = `+usedTotalSQL+`, reset_anchor = ?, reset_at = ?
 		WHERE id = ?`,
-		expires, plan.TrafficLimit, plan.MaxIPs, plan.SpeedLimit, plan.ID, id); err != nil {
+		expires, plan.TrafficLimit, plan.MaxIPs, plan.SpeedLimit, plan.ID, anchor, next, id); err != nil {
 		return User{}, fmt.Errorf("продление по тарифу: %w", err)
 	}
 	if err := resetWebhookUserState(ctx, tx, id); err != nil {

@@ -71,6 +71,10 @@ type User struct {
 	// свои значения или тариф удалён.
 	PlanID *int64 `json:"plan_id,omitempty"`
 
+	// TrafficResetAt — когда расход в следующий раз обнулится сам, по
+	// ежемесячному сбросу тарифа (reset.go); nil — только при продлении.
+	TrafficResetAt *time.Time `json:"traffic_reset_at,omitempty"`
+
 	// Online, Devices, LastSeen — на связи ли он прямо сейчас. Заполняются при
 	// чтении из последнего отчёта каждой живой ноды: соединений всего,
 	// адресов за час (только у тех, кому задан лимит устройств — остальным
@@ -407,6 +411,11 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE node_reports ADD COLUMN fetch_ms INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE nodes ADD COLUMN relay_ip TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE node_invites ADD COLUMN exit_id INTEGER REFERENCES nodes(id) ON DELETE CASCADE`,
+		// Ежемесячный сброс трафика (reset.go): у тарифа — включён ли, у
+		// покупателя — от какого дня считать и когда следующий.
+		`ALTER TABLE plans ADD COLUMN traffic_reset TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN reset_anchor TEXT`,
+		`ALTER TABLE users ADD COLUMN reset_at TEXT`,
 	}
 
 	for _, step := range steps {
@@ -536,6 +545,11 @@ type CreateUserParams struct {
 	// PlanID — завести по тарифу: срок и лимиты берутся из него. Вместе со
 	// своими сроком или лимитами не задаётся, см. ErrPlanConflict.
 	PlanID *int64 `json:"plan_id,omitempty"`
+
+	// trafficReset подставляется из тарифа в applyPlan. Не из запроса: свой
+	// сброс без тарифа боту пока задать негде, и поле в JSON обещало бы то,
+	// чего панель не делает.
+	trafficReset string
 }
 
 // Issued — выданный набор доступа. Поле Secret показывается ровно один раз.
@@ -582,6 +596,7 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 	if err := s.applyPlan(ctx, &p, now); err != nil {
 		return User{}, nil, err
 	}
+	anchor, next := resetSchedule(p.trafficReset, now)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return User{}, nil, err
@@ -589,10 +604,10 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO users (label, enabled, expires_at, traffic_limit, max_ips, max_conns, speed_limit, sub_token, created_at, external_id, plan_id)
-		 VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO users (label, enabled, expires_at, traffic_limit, max_ips, max_conns, speed_limit, sub_token, created_at, external_id, plan_id, reset_anchor, reset_at)
+		 VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.Label, nullTime(p.ExpiresAt.at()), p.TrafficLimit, p.MaxIPs, p.MaxConns, p.SpeedLimit, subToken, format(now),
-		nullString(p.ExternalID), p.PlanID)
+		nullString(p.ExternalID), p.PlanID, anchor, next)
 	if err != nil {
 		return User{}, nil, fmt.Errorf("создание пользователя: %w", err)
 	}
@@ -639,6 +654,10 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 		ID: id, Label: p.Label, Enabled: true, ExpiresAt: p.ExpiresAt.at(),
 		TrafficLimit: p.TrafficLimit, MaxIPs: p.MaxIPs, MaxConns: p.MaxConns, SpeedLimit: p.SpeedLimit,
 		SubToken: subToken, CreatedAt: now, Credentials: creds, PlanID: p.PlanID,
+	}
+	if v, ok := next.(string); ok {
+		at := parse(v)
+		user.TrafficResetAt = &at
 	}
 	return user, issued, nil
 }
@@ -851,7 +870,7 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 		                 WHERE p.user_id = u.id AND n.last_seen >= ?), 0),
 		       COALESCE((SELECT SUM(p.ips) FROM presence p JOIN nodes n ON n.id = p.node_id
 		                 WHERE p.user_id = u.id AND n.last_seen >= ?), 0),
-		       u.last_seen
+		       u.last_seen, u.reset_at
 		FROM users u ` + where
 
 	// Присутствие считается только по нодам, которые выходили на связь
@@ -876,14 +895,16 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 			external  sql.NullString
 			seen      sql.NullString
 			plan      sql.NullInt64
+			resetAt   sql.NullString
 		)
 		if err := rows.Scan(&u.ID, &u.Label, &enabled, &expires, &u.TrafficLimit,
 			&u.MaxIPs, &u.MaxConns, &u.SpeedLimit, &u.SubToken, &createdAt, &external, &u.Used, &plan,
-			&u.Online, &u.Devices, &seen); err != nil {
+			&u.Online, &u.Devices, &seen, &resetAt); err != nil {
 			return nil, err
 		}
 		u.Enabled = enabled != 0
 		u.LastSeen = parseNullTime(seen)
+		u.TrafficResetAt = parseNullTime(resetAt)
 		u.ExpiresAt = parseNullTime(expires)
 		u.CreatedAt = parse(createdAt)
 		u.ExternalID = external.String

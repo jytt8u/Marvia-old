@@ -2713,7 +2713,7 @@ function planLine(plan) {
   const d = L();
   return [
     plan.days ? d.plan.days(plan.days) : d.time.forever,
-    plan.traffic_limit ? bytes(plan.traffic_limit) : d.plan.noTraffic,
+    plan.traffic_limit ? bytes(plan.traffic_limit) + (plan.traffic_reset === "month" ? d.plan.perMonth : "") : d.plan.noTraffic,
     plan.max_ips ? d.plan.devices(plan.max_ips) : d.plan.noDevices,
     plan.speed_limit ? Math.round(plan.speed_limit / 125000) + d.user.mbit : "",
     plan.note || "",
@@ -2754,7 +2754,7 @@ function plansSheet() {
 
 function planSheet(plan) {
   const d = L();
-  const p = plan || { name: "", days: 30, traffic_limit: 50 * 1024 ** 3, max_ips: 2, speed_limit: 0, note: "" };
+  const p = plan || { name: "", days: 30, traffic_limit: 50 * 1024 ** 3, max_ips: 2, speed_limit: 0, note: "", traffic_reset: "" };
   const save = () => act(async () => {
     const body = {
       name: val("pl-name"),
@@ -2763,6 +2763,7 @@ function planSheet(plan) {
       max_ips: num("pl-ips"),
       speed_limit: Math.round(num("pl-speed") * 125000),
       note: val("pl-note"),
+      traffic_reset: document.getElementById("pl-reset").value,
     };
     if (plan) await api("/api/v1/plans/" + plan.id, "PATCH", body);
     else await api("/api/v1/plans", "POST", body);
@@ -2781,10 +2782,19 @@ function planSheet(plan) {
     })));
   }
   buttons.push(btn(d.act.cancel, "", plansSheet));
+  // Сброс — у тарифа, а не у покупателя: «Год, 50 ГБ в месяц» продаётся
+  // как тариф, и купивший получает расписание вместе с ним (reset.go).
+  const reset = el("select", { id: "pl-reset" });
+  for (const [v, text] of [["", d.plan.resetNever], ["month", d.plan.resetMonth]]) {
+    const option = el("option", { value: v, text });
+    if ((p.traffic_reset || "") === v) option.setAttribute("selected", "");
+    reset.append(option);
+  }
   sheet(plan ? plan.name : d.plan.newTitle, [
     field(d.plan.name[0], "pl-name", "text", p.name, d.plan.name[1]),
     field(d.user.newDays[0], "pl-days", "number", p.days, d.user.newDays[1]),
     field(d.user.newGB[0], "pl-gb", "number", Math.round(p.traffic_limit / 1024 ** 3 * 10) / 10, d.user.newGB[1]),
+    el("label", { text: d.plan.resetWhen }, reset),
     field(d.user.newIPs[0], "pl-ips", "number", p.max_ips, d.user.newIPs[1]),
     field(d.user.newSpeed[0], "pl-speed", "number", Math.round(p.speed_limit / 125000), d.user.newSpeed[1]),
     field(d.plan.note[0], "pl-note", "text", p.note || "", d.plan.note[1]),
@@ -2913,7 +2923,8 @@ function userSheet(user) {
     [d.user.term, user.expires_at
       ? shortDate(user.expires_at) + (left === null ? "" : d.user.days(left))
       : d.time.forever],
-    [d.user.used, bytes(user.used) + (user.traffic_limit ? d.user.of + bytes(user.traffic_limit) : d.user.noLimit)],
+    [d.user.used, bytes(user.used) + (user.traffic_limit ? d.user.of + bytes(user.traffic_limit) : d.user.noLimit)
+      + (user.traffic_reset_at ? d.user.resetOn + shortDate(user.traffic_reset_at) : "")],
     [d.user.devices, user.max_ips ? String(user.max_ips) : d.user.noDeviceLimit],
     // Срез, а не журнал: соединений сейчас, устройств из лимита (адреса нода
     // считает только тем, у кого лимит есть) и когда был в последний раз.
@@ -3915,6 +3926,7 @@ const TEXTS = {
       empty: "Пока ничего не происходило.",
       admin: "админ",
       auto: "автообновление",
+      schedule: "по расписанию",
       action: {
         "user.create": "заведён покупатель",
         "user.update": "правка покупателя",
@@ -4048,7 +4060,7 @@ const TEXTS = {
       devices: "Устройств", noDeviceLimit: "без ограничения",
       presence: "На связи", online: (n) => n + " " + pluralRU(n, "соединение", "соединения", "соединений"),
       onlineOf: (n, max) => "устройств " + n + " из " + max, offline: "нет", seen: " · был ", never: "не подключался ни разу",
-      speed: "Скорость", noSpeedLimit: "без ограничения", mbit: " Мбит/с",
+      speed: "Скорость", noSpeedLimit: "без ограничения", mbit: " Мбит/с", resetOn: " · сброс ",
       creds: "Доступы:", noCreds: "Доступов нет", issued: " · выдан ",
       addMore: "Выдать ещё:",
       extend: "+30 дней", extended: "Продлено на 30 дней",
@@ -4096,6 +4108,8 @@ const TEXTS = {
         "Купившие по нему останутся со своим сроком и лимитами — пропадёт только пометка тарифа."],
       days: (n) => n + " " + pluralRU(n, "день", "дня", "дней"),
       noTraffic: "трафик без лимита", noDevices: "устройств без ограничения",
+      perMonth: " в месяц", resetWhen: "Сброс трафика",
+      resetNever: "только при продлении", resetMonth: "каждый месяц в день покупки",
       devices: (n) => n + " " + pluralRU(n, "устройство", "устройства", "устройств"),
       pick: "Тариф", own: "Свои значения вместо тарифа",
       hint: "Подсказка: заведи тарифы кнопкой «Тарифы» вверху — тогда клиент заводится одним выбором.",
@@ -4404,6 +4418,7 @@ const TEXTS = {
       empty: "Nothing has happened yet.",
       admin: "admin",
       auto: "auto-update",
+      schedule: "scheduled",
       action: {
         "user.create": "subscriber created",
         "user.update": "subscriber edited",
@@ -4537,7 +4552,7 @@ const TEXTS = {
       devices: "Devices", noDeviceLimit: "unlimited",
       presence: "Online", online: (n) => n + (n === 1 ? " connection" : " connections"),
       onlineOf: (n, max) => n + " of " + max + " devices", offline: "no", seen: " · last seen ", never: "never connected",
-      speed: "Speed", noSpeedLimit: "unlimited", mbit: " Mbit/s",
+      speed: "Speed", noSpeedLimit: "unlimited", mbit: " Mbit/s", resetOn: " · resets ",
       creds: "Access:", noCreds: "No access issued", issued: " · issued ",
       addMore: "Issue more:",
       extend: "+30 days", extended: "Extended by 30 days",
@@ -4585,6 +4600,8 @@ const TEXTS = {
         "People who bought it keep their term and limits — only the plan mark goes away."],
       days: (n) => n + (n === 1 ? " day" : " days"),
       noTraffic: "unlimited traffic", noDevices: "unlimited devices",
+      perMonth: " a month", resetWhen: "Traffic reset",
+      resetNever: "only on renewal", resetMonth: "every month on the purchase day",
       devices: (n) => n + (n === 1 ? " device" : " devices"),
       pick: "Plan", own: "Own values instead of a plan",
       hint: "Tip: add plans with the Plans button at the top — then a client is created with one choice.",
@@ -5808,10 +5825,11 @@ function renderVals() {
     // летопись действий над панелью, и в общий loadAll ей незачем.
     journal: (state.journal || []).map((e) => ({
       when: journalWhen(e.at),
-      actor: e.actor === "admin" ? d18.journal.admin : e.actor === "auto" ? d18.journal.auto : e.actor,
+      actor: e.actor === "admin" ? d18.journal.admin : e.actor === "auto" ? d18.journal.auto
+        : e.actor === "schedule" ? d18.journal.schedule : e.actor,
       // Кто делал — меткой: админ нейтрально, автомат акцентом, ключ бота
       // своим именем без цвета.
-      actorCls: "pill plain j-actor" + (e.actor === "auto" ? " acc" : ""),
+      actorCls: "pill plain j-actor" + (e.actor === "auto" || e.actor === "schedule" ? " acc" : ""),
       what: (d18.journal.action[e.action] || e.action) + (e.detail ? " · " + e.detail : ""),
     })),
     journalEmpty: !(state.journal || []).length,

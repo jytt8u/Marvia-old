@@ -107,3 +107,6 @@ func (a *API) GuardAgainstFlood(now func() time.Time) {
 
 // FloodFailures — сколько неудач за окно ведут к блокировке.
 func FloodFailures() int { return productionFlood.failures }
+
+// NextReset — день ежемесячного сброса, см. reset.go.
+var NextReset = nextReset

@@ -422,6 +422,8 @@ func migrate(db *sql.DB) error {
 		// заведённым тогда вид проставляется задним числом.
 		`ALTER TABLE users ADD COLUMN reset_kind TEXT NOT NULL DEFAULT ''`,
 		`UPDATE users SET reset_kind = 'month' WHERE reset_anchor IS NOT NULL AND reset_kind = ''`,
+		// Сколько соединений нода отклонила за час — только числа (guard.go).
+		`CREATE TABLE IF NOT EXISTS node_guard (node_id INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE, hour TEXT NOT NULL, by_rate INTEGER NOT NULL DEFAULT 0, by_open INTEGER NOT NULL DEFAULT 0, by_block INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (node_id, hour))`,
 	}
 
 	for _, step := range steps {
@@ -678,7 +680,15 @@ type UpdateUserParams struct {
 	MaxIPs       *int    `json:"max_ips,omitempty"`
 	MaxConns     *int    `json:"max_conns,omitempty"`
 	SpeedLimit   *int64  `json:"speed_limit,omitempty"`
+
+	// NoExpiry снимает срок: доступ становится бессрочным. Отдельным полем,
+	// а не пустым expires_at: пустая строка в сроке — почти всегда ошибка
+	// бота, и молча раздать по ней вечный доступ было бы дорого.
+	NoExpiry bool `json:"no_expiry,omitempty"`
 }
+
+// ErrExpiryConflict — в одном запросе и срок, и «бессрочно».
+var ErrExpiryConflict = errors.New("срок и бессрочно вместе не задаются")
 
 // UpdateUser меняет заданные поля подписчика.
 func (s *Store) UpdateUser(ctx context.Context, id int64, p UpdateUserParams) (User, error) {
@@ -693,9 +703,15 @@ func (s *Store) UpdateUser(ctx context.Context, id int64, p UpdateUserParams) (U
 		sets = append(sets, "enabled = ?")
 		args = append(args, boolInt(*p.Enabled))
 	}
+	if p.ExpiresAt != nil && p.NoExpiry {
+		return User{}, ErrExpiryConflict
+	}
 	if p.ExpiresAt != nil {
 		sets = append(sets, "expires_at = ?")
 		args = append(args, format(p.ExpiresAt.Time.UTC()))
+	}
+	if p.NoExpiry {
+		sets = append(sets, "expires_at = NULL")
 	}
 	if p.TrafficLimit != nil {
 		sets = append(sets, "traffic_limit = ?")
@@ -737,6 +753,11 @@ func (s *Store) UpdateUser(ctx context.Context, id int64, p UpdateUserParams) (U
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return User{}, ErrNotFound
+	}
+	if p.NoExpiry && before.ExpiresAt != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM webhook_state WHERE key = ?`, fmt.Sprintf("%s:%d", WebhookUserExpired, id)); err != nil {
+			return User{}, err
+		}
 	}
 	if p.ExpiresAt != nil && (before.ExpiresAt == nil || !p.ExpiresAt.Equal(*before.ExpiresAt)) {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM webhook_state WHERE key = ?`, fmt.Sprintf("%s:%d", WebhookUserExpired, id)); err != nil {

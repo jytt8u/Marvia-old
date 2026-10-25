@@ -209,7 +209,13 @@ func run(opts serverOptions) error {
 	case panel != nil:
 		exempt = panel.TrustsRelay
 	}
-	ln = connguard.Listen(ln, connguard.Config{Exempt: exempt})
+	guard := connguard.Listen(ln, connguard.Config{Exempt: exempt})
+	if panel != nil {
+		// Пределы и закрытые адреса задаёт продавец в панели; без панели —
+		// значения по умолчанию.
+		panel.Guard(guard)
+	}
+	ln = guard
 
 	// Адрес покупателя, пришедшего через вход каскада, нода узнаёт из
 	// заголовка, который вход шлёт первым (internal/proxyproto). Читается он

@@ -69,7 +69,9 @@ func runRelay(opts serverOptions) error {
 	// начнут первым. Предел частоты — по адресу покупателя, и освобождать от
 	// него некого: перед входом других входов нет. Число открытых у входа
 	// и так держит relayMaxConns в serveRelay, он строже общего.
-	ln = connguard.Listen(ln, connguard.Config{})
+	guard := connguard.Listen(ln, connguard.Config{})
+	panel.Guard(guard)
+	ln = guard
 	defer ln.Close()
 	go func() {
 		<-ctx.Done()

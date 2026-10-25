@@ -364,3 +364,63 @@ func TestWrappedConnectionKeepsCloseWrite(t *testing.T) {
 		t.Fatalf("половинное закрытие изменило счётчик открытых: %d", n)
 	}
 }
+
+// TestSellerTightensLimitsWithoutRestartingTheNode — продавец ужесточает
+// предел из панели посреди атаки, и нода режет по новому сразу: перезапуск
+// сбросил бы всех живых покупателей ради того, чтобы отбиться от флуда.
+func TestSellerTightensLimitsWithoutRestartingTheNode(t *testing.T) {
+	inner := newQueue()
+	l := guarded(inner, Config{Rate: 20, Burst: 200})
+	defer l.Close()
+	l.Update(Limits{Rate: 5, Burst: 10})
+	for range 100 {
+		inner.push(from("203.0.113.9"))
+	}
+	if got := len(acceptAll(t, l)); got != 10 {
+		t.Fatalf("после ужесточения пропущено %d, новый запас — 10", got)
+	}
+}
+
+// TestBlockedNetworkGetsNoAnswerEvenAsRelay — закрытая продавцом сеть не
+// получает ни одного соединения, даже если её адрес — вход каскада: закрыть
+// его — решение продавца, и частотная поблажка входа его не отменяет.
+func TestBlockedNetworkGetsNoAnswerEvenAsRelay(t *testing.T) {
+	inner := newQueue()
+	blocked := from("192.0.2.77")
+	inner.push(blocked, from("198.51.100.20"))
+	exempt := func(net.IP) bool { return true }
+	l := guarded(inner, Config{Exempt: exempt})
+	defer l.Close()
+	l.Update(Limits{Blocked: []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}})
+
+	got := acceptAll(t, l)
+	if len(got) != 1 || remoteOf(got[0]) != "198.51.100.20" {
+		t.Fatalf("пропущены %d соединений, ждали одно — не из закрытой сети", len(got))
+	}
+	if blocked.closed.Load() != 1 {
+		t.Fatal("соединение из закрытой сети не закрыто")
+	}
+	if s := l.Take(); s.ByBlock != 1 {
+		t.Fatalf("в счётчике закрытых %d, ждали 1", s.ByBlock)
+	}
+}
+
+// TestPanelGetsItsOwnCountsWhateverTheJournalDid — панель забирает свои
+// счётчики отдельно от журнала: минутная запись в журнал не съедает числа,
+// которые нода ещё не успела отправить.
+func TestPanelGetsItsOwnCountsWhateverTheJournalDid(t *testing.T) {
+	inner := newQueue()
+	for range 30 {
+		inner.push(from("203.0.113.7"))
+	}
+	l := guarded(inner, Config{Rate: 1, Burst: 10})
+	defer l.Close()
+	acceptAll(t, l)
+	l.flush()
+	if s := l.Take(); s.ByRate != 20 {
+		t.Fatalf("панель получила %d отклонённых за частоту, ждали 20", s.ByRate)
+	}
+	if s := l.Take(); s != (Stats{}) {
+		t.Fatalf("повторный Take вернул %+v, а не нули", s)
+	}
+}

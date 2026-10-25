@@ -475,6 +475,7 @@
   .pill.plain::before { display: none; }
   .pill.ok { color: var(--ok); background: var(--okSoft); }
   .pill.warn { color: var(--warnInk); background: var(--warnSoft); }
+  .note.warn { color: var(--warnInk); }
   .pill.acc { color: var(--fg); background: var(--accSoft); }
   .pill.acc::before { background: var(--acc); }
 
@@ -903,7 +904,7 @@
   @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.985); } }
   #veil h2 { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
   #veil label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 500; color: var(--fg, #f1f4f7); }
-  #veil input[type=text], #veil input[type=number], #veil select, #veil textarea {
+  #veil input[type=text], #veil input[type=number], #veil input[type=date], #veil select, #veil textarea {
     min-height: 38px; padding: 8px 11px;
     border-radius: var(--r-ctl, 9px);
     border: 1px solid var(--line, #2a2f35);
@@ -913,6 +914,7 @@
     transition: border-color .15s, box-shadow .15s;
   }
   #veil input:focus, #veil select:focus, #veil textarea:focus { outline: none; border-color: var(--acc, #c3ccd6); box-shadow: 0 0 0 3px var(--accSoft, rgba(195,204,214,.14)); }
+  #veil input:disabled { opacity: .45; }
   #veil .kinds { display: flex; border: 0; flex-direction: row; gap: 14px; flex-wrap: wrap; }
   #veil .kinds legend { font-size: 12px; color: var(--dim); margin-bottom: 8px; }
   #veil .kinds label { flex-direction: row; align-items: center; cursor: pointer; }
@@ -3009,6 +3011,7 @@ function userSheet(user) {
         toast(d.user.extended);
         await loadAll();
       })),
+    btn(d.user.edit, "", () => editUserSheet(user)),
     btn(d.user.links, "", () => act(async () => {
       const links = await api("/api/v1/users/" + user.id + "/links");
       showLinks(name, links, false);
@@ -3036,6 +3039,112 @@ function userSheet(user) {
     })),
     btn(d.act.close, "", closeSheet),
   ]);
+}
+
+// editUserSheet — имя, срок и лимиты одного покупателя. Уходят только
+// изменённые поля: правка имени не должна заодно переписать срок, который
+// бот продлил, пока лист был открыт.
+function editUserSheet(user) {
+  const d = L();
+  const name = user.label || ("#" + user.id);
+  const until = user.expires_at ? new Date(user.expires_at) : null;
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateOf = (t) => t.getFullYear() + "-" + pad(t.getMonth() + 1) + "-" + pad(t.getDate());
+  const gb = Math.round(user.traffic_limit / 1024 ** 3 * 10) / 10;
+  const mbit = Math.round(user.speed_limit / 125000);
+
+  const forever = el("input", { id: "eu-forever", type: "checkbox" });
+  forever.checked = !until;
+  const dateBox = field(d.user.editUntil, "eu-until", "date", until ? dateOf(until) : "");
+  const sync = () => { document.getElementById("eu-until").disabled = forever.checked; };
+  forever.addEventListener("change", sync);
+
+  const save = () => act(async () => {
+    const body = {};
+    const label = val("eu-label");
+    if (label !== (user.label || "")) body.label = label;
+    if (forever.checked) {
+      if (until) body.no_expiry = true;
+    } else {
+      const day = val("eu-until");
+      if (!day) throw new Error(d.user.editNoDate);
+      // Доступ — до конца выбранного дня по часам продавца, а не до его
+      // начала: «до 1 декабря» значит, что 1 декабря ещё работает.
+      const at = new Date(day + "T23:59:00");
+      if (!until || Math.abs(at - until) > 60000) body.expires_at = at.toISOString();
+    }
+    if (num("eu-gb") !== gb) body.traffic_limit = Math.round(num("eu-gb") * 1024 ** 3);
+    if (num("eu-ips") !== user.max_ips) body.max_ips = num("eu-ips");
+    if (num("eu-speed") !== mbit) body.speed_limit = Math.round(num("eu-speed") * 125000);
+    if (!Object.keys(body).length) { closeSheet(); return; }
+    await api("/api/v1/users/" + user.id, "PATCH", body);
+    closeSheet();
+    toast(d.user.editSaved);
+    await loadAll();
+  });
+
+  sheet(d.user.editTitle(name), [
+    field(d.user.newLabel[0], "eu-label", "text", user.label || ""),
+    el("fieldset", { cls: "kinds" }, el("label", {}, forever, el("span", { text: d.user.editForever }))),
+    dateBox,
+    field(d.user.newGB[0], "eu-gb", "number", gb, d.user.newGB[1]),
+    field(d.user.newIPs[0], "eu-ips", "number", user.max_ips, d.user.newIPs[1]),
+    field(d.user.newSpeed[0], "eu-speed", "number", mbit, d.user.newSpeedShort),
+  ], [
+    btn(d.plan.save, "go", save),
+    btn(d.act.cancel, "", () => userSheet(user)),
+  ]);
+  sync();
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Защита нод от флуда
+   ──────────────────────────────────────────────────────────────────────── */
+
+// guardSheet — пределы на приёме для всех нод и закрытые адреса (guard.go).
+// Наверху — сколько каждая нода отбила за сутки: без этого не понять, нужна
+// ли правка вообще, а «ноль» — тоже ответ.
+function guardSheet() {
+  act(async () => {
+    const d = L();
+    const res = await api("/api/v1/guard");
+    const g = res.guard, def = res.defaults;
+    const total = (x) => x.by_rate + x.by_open + x.by_block;
+    const parts = [];
+    const day = res.day || [];
+    if (day.length) {
+      parts.push(el("div", { cls: "note", text: d.guard.day }));
+      for (const x of day) {
+        const n = total(x);
+        parts.push(el("div", { cls: "line" },
+          el("div", { cls: "note", text: x.name || ("#" + x.node_id) }),
+          el("div", { cls: "note" + (n ? " warn" : ""), text: n ? d.guard.rejected(x) : d.guard.quiet })));
+      }
+    }
+    // Пустое поле — значение по умолчанию: ноль панель так и понимает.
+    parts.push(
+      field(d.guard.rate, "gd-rate", "number", g.rate || "", d.guard.byDefault(def.rate)),
+      field(d.guard.burst, "gd-burst", "number", g.burst || "", d.guard.byDefault(def.burst)),
+      field(d.guard.maxOpen, "gd-open", "number", g.max_open || "", d.guard.byDefault(def.max_open)),
+    );
+    const blocked = el("textarea", { id: "gd-blocked", cls: "input mono", rows: "5", spellcheck: "false", placeholder: "203.0.113.7\n198.51.100.0/24" });
+    blocked.value = (g.blocked || []).join("\n");
+    parts.push(el("label", { text: d.guard.blocked }, blocked, el("span", { cls: "note", text: d.guard.blockedNote })));
+
+    const save = (body) => act(async () => {
+      await api("/api/v1/guard", "PUT", body);
+      toast(d.guard.saved);
+      guardSheet();
+    });
+    sheet(d.guard.title, parts, [
+      btn(d.plan.save, "go", () => save({
+        rate: num("gd-rate"), burst: num("gd-burst"), max_open: num("gd-open"),
+        blocked: document.getElementById("gd-blocked").value.split(/[\s,;]+/).filter(Boolean),
+      })),
+      btn(d.guard.reset, "", () => save({})),
+      btn(d.act.close, "", closeSheet),
+    ]);
+  });
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -3804,7 +3913,21 @@ const TEXTS = {
       stats: (traffic) => "Трафик за 30 дней · " + traffic,
     },
 
-    cta: { dash: "+ Выдать доступ", clients: "+ Клиент", nodes: "+ Нода", keys: "+ Ключ", plans: "Тарифы" },
+    cta: { dash: "+ Выдать доступ", clients: "+ Клиент", nodes: "+ Нода", keys: "+ Ключ", plans: "Тарифы", guard: "Защита" },
+    guard: {
+      title: "Защита нод от флуда",
+      day: "Отбито соединений за сутки:",
+      quiet: "тихо",
+      rejected: (x) => [x.by_rate && x.by_rate + " — слишком часто", x.by_open && x.by_open + " — сверх предела", x.by_block && x.by_block + " — закрытые адреса"].filter(Boolean).join(" · "),
+      rate: "Новых соединений в секунду с одного адреса",
+      burst: "Запас на пик с одного адреса",
+      maxOpen: "Открытых соединений на ноде всего",
+      byDefault: (v) => "Пусто — " + v + ", как по умолчанию",
+      blocked: "Закрытые адреса и сети",
+      blockedNote: "По одному в строке. От DDoS в канал не спасает — это дело хостера или CDN",
+      saved: "Сохранено — ноды применят со следующей синхронизацией",
+      reset: "Вернуть по умолчанию",
+    },
     search: "Поиск по имени или номеру у бота",
     wh: {
       title: "Вебхуки для бота",
@@ -3946,7 +4069,7 @@ const TEXTS = {
         "plan.create": "новый тариф", "plan.update": "правка тарифа", "plan.delete": "тариф удалён",
         "panel.upgrade": "обновление панели",
         "nodes.upgrade": "обновление нод",
-        "autoupdate.update": "автообновление",
+        "autoupdate.update": "автообновление", "guard.update": "защита нод",
       },
     },
     updates: {
@@ -4066,6 +4189,9 @@ const TEXTS = {
       extend: "+30 дней", extended: "Продлено на 30 дней",
       links: "Ссылки", disable: "Отключить", enable: "Включить",
       rotate: "Сменить адрес подписки", remove: "Удалить", removed: "Удалён",
+      edit: "Изменить", editTitle: (name) => "Изменить: " + name, editSaved: "Сохранено",
+      editForever: "Бессрочно", editUntil: "Доступ до", editNoDate: "Укажи дату или отметь «Бессрочно»",
+      newSpeedShort: "0 — без ограничения",
       days: (n) => " · " + n + " " + pluralRU(n, "день", "дня", "дней"),
       askRemove: (name) => ["Удалить " + name + "?", "Вместе с ключами и накопленной статистикой. Отменить нельзя."],
       askRotate: ["Сменить адрес подписки?",
@@ -4297,7 +4423,21 @@ const TEXTS = {
       stats: (traffic) => "Traffic over 30 days · " + traffic,
     },
 
-    cta: { dash: "+ Give access", clients: "+ Client", nodes: "+ Node", keys: "+ Key", plans: "Plans" },
+    cta: { dash: "+ Give access", clients: "+ Client", nodes: "+ Node", keys: "+ Key", plans: "Plans", guard: "Protection" },
+    guard: {
+      title: "Node flood protection",
+      day: "Connections rejected in the last day:",
+      quiet: "quiet",
+      rejected: (x) => [x.by_rate && x.by_rate + " — too often", x.by_open && x.by_open + " — over the limit", x.by_block && x.by_block + " — blocked addresses"].filter(Boolean).join(" · "),
+      rate: "New connections per second from one address",
+      burst: "Burst allowance per address",
+      maxOpen: "Open connections per node in total",
+      byDefault: (v) => "Empty — " + v + ", the default",
+      blocked: "Blocked addresses and networks",
+      blockedNote: "One per line. A DDoS on the link needs a protected host or a CDN",
+      saved: "Saved — nodes apply it on their next sync",
+      reset: "Back to defaults",
+    },
     search: "Search by name or bot id",
     wh: {
       title: "Webhooks for the bot",
@@ -4439,7 +4579,7 @@ const TEXTS = {
         "plan.create": "new plan", "plan.update": "plan edited", "plan.delete": "plan deleted",
         "panel.upgrade": "panel upgrade",
         "nodes.upgrade": "nodes upgrade",
-        "autoupdate.update": "auto-update",
+        "autoupdate.update": "auto-update", "guard.update": "node protection",
       },
     },
     updates: {
@@ -4559,6 +4699,9 @@ const TEXTS = {
       extend: "+30 days", extended: "Extended by 30 days",
       links: "Links", disable: "Disable", enable: "Enable",
       rotate: "Rotate subscription address", remove: "Delete", removed: "Deleted",
+      edit: "Edit", editTitle: (name) => "Edit: " + name, editSaved: "Saved",
+      editForever: "No expiry", editUntil: "Access until", editNoDate: "Pick a date or tick “No expiry”",
+      newSpeedShort: "0 — unlimited",
       days: (n) => " · " + n + (n === 1 ? " day" : " days"),
       askRemove: (name) => ["Delete " + name + "?", "Together with their keys and collected statistics. This cannot be undone."],
       askRotate: ["Rotate the subscription address?",
@@ -5807,9 +5950,9 @@ function renderVals() {
     doCta: CTA[page] || null,
     // Тарифы правит только админ: тариф решает, что получат за деньги все
     // следующие покупатели. Ключ бота их видит, но кнопки ему не нужно.
-    hasCta2: page === "clients" && state.admin,
-    pageCta2: d18.cta.plans,
-    doCta2: () => plansSheet(),
+    hasCta2: (page === "clients" || page === "nodes") && state.admin,
+    pageCta2: page === "nodes" ? d18.cta.guard : d18.cta.plans,
+    doCta2: () => (page === "nodes" ? guardSheet() : plansSheet()),
 
     hasError: !!state.error,
     errText: state.error || "",

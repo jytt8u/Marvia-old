@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jytt8u/marvia/internal/connguard"
 	"github.com/jytt8u/marvia/internal/look"
 	"github.com/jytt8u/marvia/internal/redact"
 	"github.com/jytt8u/marvia/internal/routes"
@@ -124,6 +125,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/events", a.admin(a.listEvents))
 
 	mux.HandleFunc("GET /api/v1/alerts", a.admin(a.getAlerts))
+	mux.HandleFunc("GET /api/v1/guard", a.admin(a.getGuard))
+	mux.HandleFunc("PUT /api/v1/guard", a.admin(a.setGuard))
 
 	// Обновления: только админ. Ключ бота обновлять серверы не должен —
 	// ему хватает подписчиков.
@@ -470,8 +473,12 @@ func (a *API) updateUser(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &p) {
 		return
 	}
-	if p.ExtendBy != "" && p.ExpiresAt != nil {
-		fail(w, http.StatusBadRequest, "extend_by и expires_at вместе не работают: либо продлить, либо назначить срок")
+	if p.ExtendBy != "" && (p.ExpiresAt != nil || p.NoExpiry) {
+		fail(w, http.StatusBadRequest, "extend_by вместе с expires_at или no_expiry не работает: либо продлить, либо назначить срок")
+		return
+	}
+	if p.ExpiresAt != nil && p.NoExpiry {
+		fail(w, http.StatusBadRequest, ErrExpiryConflict.Error())
 		return
 	}
 
@@ -864,10 +871,16 @@ func (a *API) nodeUsers(w http.ResponseWriter, r *http.Request, n Node) {
 		fail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	guard, err := a.store.GuardSettings(r.Context())
+	if err != nil {
+		fail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	// upgrade_to — просьба обновиться, если продавец её дал. Нода передаёт
 	// её службе обновления; что ставить, та решает сама (internal/updater).
 	// relays — адреса входов каскада, от которых верить адресу покупателя.
-	ok(w, map[string]any{"users": list, "upgrade_to": n.UpgradeTo, "relays": relays})
+	// guard — пределы на приёме и закрытые адреса (guard.go).
+	ok(w, map[string]any{"users": list, "upgrade_to": n.UpgradeTo, "relays": relays, "guard": nodeGuard(guard)})
 }
 
 // maxCoverNames — сколько имён прикрытия панель принимает от ноды за раз.
@@ -891,9 +904,16 @@ func (a *API) nodeUsage(w http.ResponseWriter, r *http.Request, n Node) {
 		// отстали от релиза.
 		Version string `json:"version"`
 		Arch    string `json:"arch"`
+
+		// Guard — сколько соединений нода отклонила с прошлого отчёта:
+		// только числа, адресов нода не присылает.
+		Guard connguard.Stats `json:"guard"`
 	}
 	if !decodeFromNode(w, r, &body) {
 		return
+	}
+	if err := a.store.ReportGuard(r.Context(), n.ID, body.Guard, time.Now()); err != nil {
+		log.Printf("отклонённые нодой %d не сохранились: %v", n.ID, err)
 	}
 	if countryUnknown(n.Country) {
 		a.fillCountry(n.ID, n.Country, n.Address)
@@ -1672,6 +1692,12 @@ func updateDetail(p UpdateUserParams, extend string) string {
 		} else {
 			parts = append(parts, "отключён")
 		}
+	}
+	if p.ExpiresAt != nil {
+		parts = append(parts, "назначен срок")
+	}
+	if p.NoExpiry {
+		parts = append(parts, "срок снят")
 	}
 	if p.TrafficLimit != nil {
 		parts = append(parts, "изменена квота")

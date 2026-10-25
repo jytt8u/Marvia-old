@@ -64,6 +64,9 @@ type Client struct {
 
 	// route — каскад, если нода в нём участвует; см. route.go.
 	route route
+
+	// guards — приёмы под пределами из панели; см. guard.go.
+	guards guards
 }
 
 // buildRetry — через сколько снова сообщать сборку панели, которая её не
@@ -156,6 +159,9 @@ func (c *Client) FetchUsers(ctx context.Context) ([]users.User, error) {
 		// адреса его входов. Панель постарше не шлёт ни того, ни другого.
 		RelayTo string   `json:"relay_to"`
 		Relays  []string `json:"relays"`
+
+		// Guard — пределы на приёме от продавца; панель постарше не шлёт.
+		Guard *guardConfig `json:"guard"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponse)).Decode(&body); err != nil {
 		return nil, fmt.Errorf("разбор списка: %w", err)
@@ -170,6 +176,7 @@ func (c *Client) FetchUsers(ctx context.Context) ([]users.User, error) {
 		return nil, fmt.Errorf("неверный список доступов: %w", err)
 	}
 	c.route.set(body.RelayTo, body.Relays)
+	c.applyGuard(body.Guard)
 	if c.snapshotPath != "" {
 		now := time.Now()
 		c.snapshotErr = c.saveSnapshot(body.Users, now)
@@ -206,6 +213,12 @@ func (c *Client) ReportUsage(ctx context.Context, report map[string]users.Usage,
 	withBuild := c.version != "" && time.Now().After(c.quietUntil)
 	if withBuild {
 		body["version"], body["arch"] = c.version, c.arch
+		// Отклонённые флудом — в той же группе, что сборка: панель старше
+		// 0.12 не знает и этого поля. Числа, не дошедшие до неё, теряются,
+		// а не копятся: это сводка, а не учёт денег.
+		if s := c.takeGuardStats(); s.ByRate+s.ByOpen+s.ByBlock > 0 {
+			body["guard"] = s
+		}
 	}
 	err := c.postUsage(ctx, body)
 	var old *oldPanelError
@@ -214,6 +227,7 @@ func (c *Client) ReportUsage(ctx context.Context, report map[string]users.Usage,
 		c.quietUntil = time.Now().Add(buildRetry)
 		delete(body, "version")
 		delete(body, "arch")
+		delete(body, "guard")
 		err = c.postUsage(ctx, body)
 	}
 	return err

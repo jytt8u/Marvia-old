@@ -78,51 +78,101 @@ type Config struct {
 	Exempt func(net.IP) bool
 }
 
+// Limits — то, что продавец меняет из панели на ходу, без перезапуска ноды.
+// Нулевые поля — значения по умолчанию, как в Config.
+type Limits struct {
+	Rate    float64
+	Burst   float64
+	MaxOpen int
+
+	// Blocked — адреса и сети, которым нода не отвечает вовсе: соединение
+	// закрывается до чтения, как отклонённое за частоту. Это ответ на
+	// «нас долбят вот с этих адресов» — продавец видит их у хостера или в
+	// своём журнале и закрывает, не заходя на сервер.
+	Blocked []netip.Prefix
+}
+
+// Stats — сколько соединений отклонено с прошлого вызова Take. Только
+// числа: адреса нода не копит и панели не отдаёт.
+type Stats struct {
+	ByRate  int64 `json:"by_rate"`
+	ByOpen  int64 `json:"by_open"`
+	ByBlock int64 `json:"by_block"`
+}
+
+// Guard — приём с пределами, которые можно менять на ходу.
+type Guard interface {
+	net.Listener
+	// Update ставит новые пределы. Уже открытые соединения не трогаются:
+	// новый предел открытых действует на следующие.
+	Update(Limits)
+	// Take отдаёт счётчики отклонённых и обнуляет их.
+	Take() Stats
+}
+
 // Listen оборачивает слушатель пределами cfg.
 //
 // Ставится первым, над сырым TCP: до заголовка PROXY, до TLS и REALITY.
 // Каждый слой выше тратит на соединение больше, и отсечь флуд надо раньше,
 // чем он до них дошёл.
-func Listen(inner net.Listener, cfg Config) net.Listener {
-	if cfg.Rate <= 0 {
-		cfg.Rate = DefaultRate
-	}
-	if cfg.Burst < 1 {
-		cfg.Burst = DefaultBurst
-	}
-	if cfg.MaxOpen <= 0 {
-		cfg.MaxOpen = DefaultMaxOpen
-	}
+func Listen(inner net.Listener, cfg Config) Guard {
 	if cfg.MaxTracked <= 0 {
 		cfg.MaxTracked = DefaultMaxTracked
 	}
 	l := &listener{
 		Listener: inner,
 		exempt:   cfg.Exempt,
-		maxOpen:  int64(cfg.MaxOpen),
 		now:      time.Now,
 		table: table{
-			rate:    cfg.Rate,
-			burst:   cfg.Burst,
 			max:     cfg.MaxTracked,
 			buckets: make(map[netip.Addr]bucket),
 		},
 		done: make(chan struct{}),
 	}
+	l.Update(Limits{Rate: cfg.Rate, Burst: cfg.Burst, MaxOpen: cfg.MaxOpen})
 	go l.report()
 	return l
+}
+
+func (l *listener) Update(lim Limits) {
+	if lim.Rate <= 0 {
+		lim.Rate = DefaultRate
+	}
+	if lim.Burst < 1 {
+		lim.Burst = DefaultBurst
+	}
+	if lim.MaxOpen <= 0 {
+		lim.MaxOpen = DefaultMaxOpen
+	}
+	l.table.mu.Lock()
+	l.table.rate, l.table.burst = lim.Rate, lim.Burst
+	l.table.mu.Unlock()
+	l.maxOpen.Store(int64(lim.MaxOpen))
+	blocked := append([]netip.Prefix(nil), lim.Blocked...)
+	l.blocked.Store(&blocked)
+}
+
+func (l *listener) Take() Stats {
+	return Stats{ByRate: l.totRate.Swap(0), ByOpen: l.totOpen.Swap(0), ByBlock: l.totBlock.Swap(0)}
 }
 
 type listener struct {
 	net.Listener
 	exempt  func(net.IP) bool
-	maxOpen int64
+	maxOpen atomic.Int64
+	blocked atomic.Pointer[[]netip.Prefix]
 	now     func() time.Time
 	table   table
 
-	open   atomic.Int64 // открыто сейчас
-	byRate atomic.Int64 // отклонено за частоту с начала минуты
-	byOpen atomic.Int64 // отклонено сверх предела открытых
+	open    atomic.Int64 // открыто сейчас
+	byRate  atomic.Int64 // отклонено за частоту с начала минуты
+	byOpen  atomic.Int64 // отклонено сверх предела открытых
+	byBlock atomic.Int64 // отклонено по списку закрытых адресов
+
+	// Те же счётчики для панели: журнал обнуляет свои раз в минуту, а
+	// панель забирает свои с каждым отчётом, и делить одни на двоих значило
+	// бы, что один из них недосчитается.
+	totRate, totOpen, totBlock atomic.Int64
 
 	done chan struct{}
 	once sync.Once
@@ -137,19 +187,51 @@ func (l *listener) Accept() (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		if !l.allow(c.RemoteAddr()) {
-			l.byRate.Add(1)
+		if l.isBlocked(c.RemoteAddr()) {
+			l.byBlock.Add(1)
+			l.totBlock.Add(1)
 			drop(c)
 			continue
 		}
-		if l.open.Add(1) > l.maxOpen {
+		if !l.allow(c.RemoteAddr()) {
+			l.byRate.Add(1)
+			l.totRate.Add(1)
+			drop(c)
+			continue
+		}
+		if l.open.Add(1) > l.maxOpen.Load() {
 			l.open.Add(-1)
 			l.byOpen.Add(1)
+			l.totOpen.Add(1)
 			drop(c)
 			continue
 		}
 		return &conn{Conn: c, release: func() { l.open.Add(-1) }}, nil
 	}
+}
+
+// isBlocked — адрес в списке закрытых. Список действует и на входы каскада
+// с узлами CDN: закрыть их — решение продавца, а не случайность частоты.
+func (l *listener) isBlocked(addr net.Addr) bool {
+	list := l.blocked.Load()
+	if list == nil || len(*list) == 0 {
+		return false
+	}
+	tcp, ok := addr.(*net.TCPAddr)
+	if !ok {
+		return false
+	}
+	a, ok := netip.AddrFromSlice(tcp.IP)
+	if !ok {
+		return false
+	}
+	a = a.Unmap()
+	for _, p := range *list {
+		if p.Contains(a) {
+			return true
+		}
+	}
+	return false
 }
 
 func (l *listener) allow(addr net.Addr) bool {
@@ -194,12 +276,12 @@ func (l *listener) report() {
 }
 
 func (l *listener) flush() {
-	rate, open := l.byRate.Swap(0), l.byOpen.Swap(0)
-	if rate+open == 0 {
+	rate, open, block := l.byRate.Swap(0), l.byOpen.Swap(0), l.byBlock.Swap(0)
+	if rate+open+block == 0 {
 		return
 	}
-	log.Printf("за минуту отклонено соединений: %d — слишком часто с одного адреса, %d — сверх предела в %d открытых",
-		rate, open, l.maxOpen)
+	log.Printf("за минуту отклонено соединений: %d — слишком часто с одного адреса, %d — сверх предела в %d открытых, %d — из закрытых адресов",
+		rate, open, l.maxOpen.Load(), block)
 }
 
 // drop закрывает отклонённое соединение сбросом, а не вежливым FIN. После

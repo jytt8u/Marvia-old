@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Ежемесячный сброс трафика.
+// Сброс трафика по расписанию: каждый день, неделю, месяц или год.
 //
 // «Год, 50 ГБ в месяц» без него не продать: квота на весь срок кончилась бы
 // в феврале, а обнулять её каждому руками в день покупки продавец забудет
@@ -21,9 +21,28 @@ import (
 const (
 	// ResetNever — расход обнуляется только продлением или кнопкой.
 	ResetNever = ""
+	// ResetDaily — каждые сутки в тот же час, что куплено или продлено.
+	ResetDaily = "day"
+	// ResetWeekly — каждую неделю в тот же день недели.
+	ResetWeekly = "week"
 	// ResetMonthly — каждый месяц в тот же день, что куплено или продлено.
 	ResetMonthly = "month"
+	// ResetYearly — каждый год в тот же день; купившим 29 февраля — 28-го.
+	ResetYearly = "year"
 )
+
+// resetKinds — что панель умеет, с подписью для журнала.
+var resetKinds = map[string]string{
+	ResetDaily:   "ежедневный",
+	ResetWeekly:  "еженедельный",
+	ResetMonthly: "ежемесячный",
+	ResetYearly:  "ежегодный",
+}
+
+func knownReset(kind string) bool {
+	_, ok := resetKinds[kind]
+	return kind == ResetNever || ok
+}
 
 // resetEvery — как часто искать, кому пора. Сброс на десять минут позже
 // дня покупки никто не заметит, а каждую минуту гонять запрос по всем
@@ -34,17 +53,17 @@ const resetEvery = 10 * time.Minute
 // ActorAuto: тот подписан «автообновление», и сброс выглядел бы его делом.
 const ActorSchedule = "schedule"
 
-// resetSchedule — начало отсчёта и первый сброс для покупателя, купившего
-// или продлившего в now. Для тарифа без сброса оба NULL: так и хранится
-// «по расписанию не сбрасывать».
-func resetSchedule(kind string, now time.Time) (anchor, next any) {
-	if kind != ResetMonthly {
-		return nil, nil
+// resetSchedule — начало отсчёта, первый сброс и вид сброса для
+// покупателя, купившего или продлившего в now. Для тарифа без сброса время
+// NULL: так и хранится «по расписанию не сбрасывать».
+func resetSchedule(kind string, now time.Time) (anchor, next any, stored string) {
+	if _, ok := resetKinds[kind]; !ok {
+		return nil, nil, ResetNever
 	}
 	// Секунды без долей: время в базе сравнивается строкой, а у RFC3339Nano
 	// без долей и с долями порядок символов не совпадает с порядком времени.
 	from := now.UTC().Truncate(time.Second)
-	return format(from), format(nextReset(from, from))
+	return format(from), format(nextReset(kind, from, from)), kind
 }
 
 // nextReset — ближайший после after день сброса для отсчёта от anchor.
@@ -54,17 +73,47 @@ func resetSchedule(kind string, now time.Time) (anchor, next any) {
 // сбросу — с февраля он съехал бы на 28-е навсегда, а Go ещё и перенёс бы
 // «31 февраля» на 3 марта. Календарь — московский: покупка в час ночи по
 // Москве — это 1-е число для продавца, хотя по UTC ещё 31-е.
-func nextReset(anchor, after time.Time) time.Time {
+//
+// Номер периода сначала прикидывается по разнице дат, а не перебором с
+// первого: панель, пролежавшая выключенной год, иначе перебрала бы для
+// каждого суточного тарифа триста шестьдесят пять дней.
+func nextReset(kind string, anchor, after time.Time) time.Time {
 	a := anchor.In(moscow)
-	// Предел — чтобы испорченная дата в базе не крутила цикл вечно: двести
-	// лет месячных периодов хватит любому тарифу.
-	for k := 1; k <= 12*200; k++ {
-		t := addMonthsClamped(a, k)
-		if t.After(after) {
+	var (
+		step func(k int) time.Time
+		k    int
+	)
+	switch kind {
+	case ResetDaily, ResetWeekly:
+		days := 1
+		if kind == ResetWeekly {
+			days = 7
+		}
+		// В Москве нет перевода часов, и сутки там всегда ровно 24 часа:
+		// деление даёт номер периода без календарных поправок.
+		period := time.Duration(days) * 24 * time.Hour
+		step = func(k int) time.Time { return a.Add(time.Duration(k) * period) }
+		k = int(after.Sub(a) / period)
+	case ResetYearly:
+		step = func(k int) time.Time { return addMonthsClamped(a, 12*k) }
+		k = after.In(moscow).Year() - a.Year() - 1
+	default:
+		step = func(k int) time.Time { return addMonthsClamped(a, k) }
+		l := after.In(moscow)
+		k = (l.Year()-a.Year())*12 + int(l.Month()) - int(a.Month()) - 1
+	}
+	if k < 1 {
+		k = 1
+	}
+	// Прикидка может недобрать один-два периода, но не перебрать: дальше
+	// шагаем вперёд, пока не окажемся позже after. Предел — на случай
+	// испорченной даты в базе.
+	for i := 0; i < 1000; i, k = i+1, k+1 {
+		if t := step(k); t.After(after) {
 			return t.UTC()
 		}
 	}
-	return after.Add(30 * 24 * time.Hour).UTC()
+	return after.Add(24 * time.Hour).UTC()
 }
 
 // addMonthsClamped — тот же день через k месяцев, а если такого дня нет —
@@ -87,12 +136,15 @@ func addMonthsClamped(t time.Time, k int) time.Time {
 // не дал. Следующий день сброса — первый после now.
 //
 // Истёкшим срок сброса переносится без самого сброса: доступа у них всё
-// равно нет, а журнал не должен годами копить ежемесячное «сброшено» у
-// покупателей, ушедших год назад. Продлят — продление обнулит расход само.
+// равно нет, а журнал не должен годами копить «сброшено» у покупателей,
+// ушедших год назад. Продлят — продление обнулит расход само.
+//
+// Каждый сброс пишется в журнал от имени расписания и с видом сброса:
+// «почему у него опять ноль» решается одним взглядом.
 func (s *Store) ResetDue(ctx context.Context, now time.Time) ([]int64, error) {
 	stamp := format(now.UTC().Truncate(time.Second))
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, reset_anchor, expires_at FROM users
+		SELECT id, reset_anchor, reset_kind, expires_at FROM users
 		WHERE reset_at IS NOT NULL AND reset_at <= ? AND reset_anchor IS NOT NULL`, stamp)
 	if err != nil {
 		return nil, fmt.Errorf("поиск сбросов: %w", err)
@@ -100,6 +152,7 @@ func (s *Store) ResetDue(ctx context.Context, now time.Time) ([]int64, error) {
 	type due struct {
 		id      int64
 		anchor  time.Time
+		kind    string
 		expired bool
 	}
 	var list []due
@@ -109,7 +162,7 @@ func (s *Store) ResetDue(ctx context.Context, now time.Time) ([]int64, error) {
 			anchor  string
 			expires sql.NullString
 		)
-		if err := rows.Scan(&d.id, &anchor, &expires); err != nil {
+		if err := rows.Scan(&d.id, &anchor, &d.kind, &expires); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -126,12 +179,13 @@ func (s *Store) ResetDue(ctx context.Context, now time.Time) ([]int64, error) {
 
 	var done []int64
 	for _, d := range list {
-		ok, err := s.resetOne(ctx, d.id, !d.expired, format(nextReset(d.anchor, now)), stamp)
+		ok, err := s.resetOne(ctx, d.id, !d.expired, format(nextReset(d.kind, d.anchor, now)), stamp)
 		if err != nil {
 			return done, err
 		}
 		if ok && !d.expired {
 			done = append(done, d.id)
+			s.Record(ctx, Event{Action: EventUserReset, Actor: ActorSchedule, UserID: d.id, Detail: resetKinds[d.kind]})
 		}
 	}
 	return done, nil
@@ -175,12 +229,8 @@ func (a *API) KeepTrafficReset(ctx context.Context) {
 	defer t.Stop()
 	now := time.Now()
 	for {
-		ids, err := a.store.ResetDue(ctx, now)
-		if err != nil {
-			log.Printf("ежемесячный сброс трафика: %v", err)
-		}
-		for _, id := range ids {
-			a.store.Record(ctx, Event{Action: EventUserReset, Actor: ActorSchedule, UserID: id, Detail: "ежемесячный"})
+		if _, err := a.store.ResetDue(ctx, now); err != nil {
+			log.Printf("сброс трафика по расписанию: %v", err)
 		}
 		select {
 		case <-ctx.Done():

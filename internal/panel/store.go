@@ -71,8 +71,10 @@ type User struct {
 	// свои значения или тариф удалён.
 	PlanID *int64 `json:"plan_id,omitempty"`
 
-	// TrafficResetAt — когда расход в следующий раз обнулится сам, по
-	// ежемесячному сбросу тарифа (reset.go); nil — только при продлении.
+	// TrafficReset и TrafficResetAt — как часто и когда в следующий раз
+	// расход обнулится сам, по расписанию тарифа (reset.go); пусто и nil —
+	// только при продлении.
+	TrafficReset   string     `json:"traffic_reset,omitempty"`
 	TrafficResetAt *time.Time `json:"traffic_reset_at,omitempty"`
 
 	// Online, Devices, LastSeen — на связи ли он прямо сейчас. Заполняются при
@@ -416,6 +418,10 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE plans ADD COLUMN traffic_reset TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN reset_anchor TEXT`,
 		`ALTER TABLE users ADD COLUMN reset_at TEXT`,
+		// Вид сброса у покупателя. В alpha.29 бывал только месячный, и
+		// заведённым тогда вид проставляется задним числом.
+		`ALTER TABLE users ADD COLUMN reset_kind TEXT NOT NULL DEFAULT ''`,
+		`UPDATE users SET reset_kind = 'month' WHERE reset_anchor IS NOT NULL AND reset_kind = ''`,
 	}
 
 	for _, step := range steps {
@@ -596,7 +602,7 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 	if err := s.applyPlan(ctx, &p, now); err != nil {
 		return User{}, nil, err
 	}
-	anchor, next := resetSchedule(p.trafficReset, now)
+	anchor, next, kind := resetSchedule(p.trafficReset, now)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return User{}, nil, err
@@ -604,10 +610,10 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO users (label, enabled, expires_at, traffic_limit, max_ips, max_conns, speed_limit, sub_token, created_at, external_id, plan_id, reset_anchor, reset_at)
-		 VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO users (label, enabled, expires_at, traffic_limit, max_ips, max_conns, speed_limit, sub_token, created_at, external_id, plan_id, reset_anchor, reset_at, reset_kind)
+		 VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.Label, nullTime(p.ExpiresAt.at()), p.TrafficLimit, p.MaxIPs, p.MaxConns, p.SpeedLimit, subToken, format(now),
-		nullString(p.ExternalID), p.PlanID, anchor, next)
+		nullString(p.ExternalID), p.PlanID, anchor, next, kind)
 	if err != nil {
 		return User{}, nil, fmt.Errorf("создание пользователя: %w", err)
 	}
@@ -658,6 +664,7 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 	if v, ok := next.(string); ok {
 		at := parse(v)
 		user.TrafficResetAt = &at
+		user.TrafficReset = kind
 	}
 	return user, issued, nil
 }
@@ -870,7 +877,7 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 		                 WHERE p.user_id = u.id AND n.last_seen >= ?), 0),
 		       COALESCE((SELECT SUM(p.ips) FROM presence p JOIN nodes n ON n.id = p.node_id
 		                 WHERE p.user_id = u.id AND n.last_seen >= ?), 0),
-		       u.last_seen, u.reset_at
+		       u.last_seen, u.reset_at, u.reset_kind
 		FROM users u ` + where
 
 	// Присутствие считается только по нодам, которые выходили на связь
@@ -899,7 +906,7 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 		)
 		if err := rows.Scan(&u.ID, &u.Label, &enabled, &expires, &u.TrafficLimit,
 			&u.MaxIPs, &u.MaxConns, &u.SpeedLimit, &u.SubToken, &createdAt, &external, &u.Used, &plan,
-			&u.Online, &u.Devices, &seen, &resetAt); err != nil {
+			&u.Online, &u.Devices, &seen, &resetAt, &u.TrafficReset); err != nil {
 			return nil, err
 		}
 		u.Enabled = enabled != 0

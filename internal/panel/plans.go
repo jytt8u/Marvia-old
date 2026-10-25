@@ -45,7 +45,8 @@ type Plan struct {
 	Note string `json:"note,omitempty"`
 
 	// TrafficReset — когда расход начинается заново внутри срока: "" —
-	// только при продлении, "month" — каждый месяц от дня покупки (reset.go).
+	// только при продлении, "day", "week", "month" или "year" — по
+	// расписанию от дня покупки (reset.go).
 	TrafficReset string `json:"traffic_reset,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
@@ -78,8 +79,8 @@ func (p *PlanParams) check() error {
 		return errors.New("срок тарифа — от 0 (бессрочно) до 3660 дней")
 	case p.TrafficLimit < 0 || p.MaxIPs < 0 || p.SpeedLimit < 0:
 		return errors.New("лимиты тарифа не бывают отрицательными")
-	case p.TrafficReset != ResetNever && p.TrafficReset != ResetMonthly:
-		return fmt.Errorf("сброс трафика — %q или %q, а не %q", ResetNever, ResetMonthly, p.TrafficReset)
+	case !knownReset(p.TrafficReset):
+		return fmt.Errorf("сброс трафика — пусто, day, week, month или year, а не %q", p.TrafficReset)
 	}
 	return nil
 }
@@ -241,7 +242,7 @@ func (s *Store) RenewUser(ctx context.Context, id, planID int64) (User, error) {
 	}
 
 	now := time.Now().UTC()
-	anchor, next := resetSchedule(plan.TrafficReset, now)
+	anchor, next, kind := resetSchedule(plan.TrafficReset, now)
 	var expires any
 	if plan.Days > 0 {
 		base := now
@@ -255,9 +256,9 @@ func (s *Store) RenewUser(ctx context.Context, id, planID int64) (User, error) {
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE users SET expires_at = ?, traffic_limit = ?, max_ips = ?, speed_limit = ?, plan_id = ?,
-		       enabled = 1, traffic_offset = `+usedTotalSQL+`, reset_anchor = ?, reset_at = ?
+		       enabled = 1, traffic_offset = `+usedTotalSQL+`, reset_anchor = ?, reset_at = ?, reset_kind = ?
 		WHERE id = ?`,
-		expires, plan.TrafficLimit, plan.MaxIPs, plan.SpeedLimit, plan.ID, anchor, next, id); err != nil {
+		expires, plan.TrafficLimit, plan.MaxIPs, plan.SpeedLimit, plan.ID, anchor, next, kind, id); err != nil {
 		return User{}, fmt.Errorf("продление по тарифу: %w", err)
 	}
 	if err := resetWebhookUserState(ctx, tx, id); err != nil {

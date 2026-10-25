@@ -2713,7 +2713,7 @@ function planLine(plan) {
   const d = L();
   return [
     plan.days ? d.plan.days(plan.days) : d.time.forever,
-    plan.traffic_limit ? bytes(plan.traffic_limit) + (plan.traffic_reset === "month" ? d.plan.perMonth : "") : d.plan.noTraffic,
+    plan.traffic_limit ? bytes(plan.traffic_limit) + (d.plan.per[plan.traffic_reset] || "") : d.plan.noTraffic,
     plan.max_ips ? d.plan.devices(plan.max_ips) : d.plan.noDevices,
     plan.speed_limit ? Math.round(plan.speed_limit / 125000) + d.user.mbit : "",
     plan.note || "",
@@ -2785,7 +2785,7 @@ function planSheet(plan) {
   // Сброс — у тарифа, а не у покупателя: «Год, 50 ГБ в месяц» продаётся
   // как тариф, и купивший получает расписание вместе с ним (reset.go).
   const reset = el("select", { id: "pl-reset" });
-  for (const [v, text] of [["", d.plan.resetNever], ["month", d.plan.resetMonth]]) {
+  for (const [v, text] of [["", d.plan.resetNever], ...Object.entries(d.plan.resetEvery)]) {
     const option = el("option", { value: v, text });
     if ((p.traffic_reset || "") === v) option.setAttribute("selected", "");
     reset.append(option);
@@ -4108,8 +4108,9 @@ const TEXTS = {
         "Купившие по нему останутся со своим сроком и лимитами — пропадёт только пометка тарифа."],
       days: (n) => n + " " + pluralRU(n, "день", "дня", "дней"),
       noTraffic: "трафик без лимита", noDevices: "устройств без ограничения",
-      perMonth: " в месяц", resetWhen: "Сброс трафика",
-      resetNever: "только при продлении", resetMonth: "каждый месяц в день покупки",
+      per: { day: " в сутки", week: " в неделю", month: " в месяц", year: " в год" },
+      resetWhen: "Сброс трафика", resetNever: "только при продлении",
+      resetEvery: { day: "каждые сутки", week: "каждую неделю", month: "каждый месяц в день покупки", year: "каждый год" },
       devices: (n) => n + " " + pluralRU(n, "устройство", "устройства", "устройств"),
       pick: "Тариф", own: "Свои значения вместо тарифа",
       hint: "Подсказка: заведи тарифы кнопкой «Тарифы» вверху — тогда клиент заводится одним выбором.",
@@ -4600,8 +4601,9 @@ const TEXTS = {
         "People who bought it keep their term and limits — only the plan mark goes away."],
       days: (n) => n + (n === 1 ? " day" : " days"),
       noTraffic: "unlimited traffic", noDevices: "unlimited devices",
-      perMonth: " a month", resetWhen: "Traffic reset",
-      resetNever: "only on renewal", resetMonth: "every month on the purchase day",
+      per: { day: " a day", week: " a week", month: " a month", year: " a year" },
+      resetWhen: "Traffic reset", resetNever: "only on renewal",
+      resetEvery: { day: "every day", week: "every week", month: "every month on the purchase day", year: "every year" },
       devices: (n) => n + (n === 1 ? " device" : " devices"),
       pick: "Plan", own: "Own values instead of a plan",
       hint: "Tip: add plans with the Plans button at the top — then a client is created with one choice.",

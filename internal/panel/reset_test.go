@@ -95,11 +95,11 @@ func TestPanelThatSleptThreeMonthsResetsOnceNotThrice(t *testing.T) {
 func TestResetDayStaysOnTheThirtyFirstAfterShortMonths(t *testing.T) {
 	msk := time.FixedZone("MSK", 3*60*60)
 	anchor := time.Date(2027, time.January, 31, 12, 0, 0, 0, msk)
-	feb := panel.NextReset(anchor, anchor)
+	feb := panel.NextReset("month", anchor, anchor)
 	if want := time.Date(2027, time.February, 28, 12, 0, 0, 0, msk); !feb.Equal(want) {
 		t.Fatalf("после 31 января сброс %v, ожидалось 28 февраля", feb.In(msk))
 	}
-	mar := panel.NextReset(anchor, feb)
+	mar := panel.NextReset("month", anchor, feb)
 	if want := time.Date(2027, time.March, 31, 12, 0, 0, 0, msk); !mar.Equal(want) {
 		t.Fatalf("после февраля сброс %v, ожидалось 31 марта", mar.In(msk))
 	}
@@ -148,8 +148,72 @@ func TestExpiredClientIsNotResetButHisScheduleMovesOn(t *testing.T) {
 func TestPlanRefusesResetPanelCannotDo(t *testing.T) {
 	h := newHarness(t)
 	code := h.do(http.MethodPost, "/api/v1/plans", adminToken,
-		map[string]any{"name": "Неделя", "days": 7, "traffic_reset": "week"}, nil)
+		map[string]any{"name": "Две недели", "days": 14, "traffic_reset": "fortnight"}, nil)
 	if code != http.StatusBadRequest {
 		t.Fatalf("незнакомый сброс принят: код %d", code)
 	}
+}
+
+func TestEveryResetKindLandsOnItsNextDay(t *testing.T) {
+	msk := time.FixedZone("MSK", 3*60*60)
+	anchor := time.Date(2028, time.February, 29, 9, 30, 0, 0, msk)
+	cases := []struct {
+		kind  string
+		after time.Time
+		want  time.Time
+	}{
+		{"day", anchor, time.Date(2028, time.March, 1, 9, 30, 0, 0, msk)},
+		{"day", time.Date(2028, time.March, 10, 9, 30, 0, 0, msk), time.Date(2028, time.March, 11, 9, 30, 0, 0, msk)},
+		{"week", anchor, time.Date(2028, time.March, 7, 9, 30, 0, 0, msk)},
+		{"week", time.Date(2028, time.March, 8, 0, 0, 0, 0, msk), time.Date(2028, time.March, 14, 9, 30, 0, 0, msk)},
+		// Купившему 29 февраля в невисокосный год сброс 28-го, а в
+		// високосный — снова 29-го.
+		{"year", anchor, time.Date(2029, time.February, 28, 9, 30, 0, 0, msk)},
+		{"year", time.Date(2031, time.March, 1, 0, 0, 0, 0, msk), time.Date(2032, time.February, 29, 9, 30, 0, 0, msk)},
+		{"month", time.Date(2029, time.January, 30, 0, 0, 0, 0, msk), time.Date(2029, time.February, 28, 9, 30, 0, 0, msk)},
+	}
+	for _, c := range cases {
+		if got := panel.NextReset(c.kind, anchor, c.after); !got.Equal(c.want) {
+			t.Errorf("%s после %v: %v, ожидалось %v", c.kind, c.after.In(msk), got.In(msk), c.want)
+		}
+	}
+}
+
+func TestDailyResetAfterAYearAsleepIsOneResetAndTomorrow(t *testing.T) {
+	h := newHarness(t)
+	plan := h.createPlan(map[string]any{"name": "Сутки по 5 ГБ", "days": 0, "traffic_limit": 5 * gb, "traffic_reset": "day"})
+	var created createUserResponse
+	h.do(http.MethodPost, "/api/v1/users", adminToken, map[string]any{"label": "Лев", "plan_id": plan.ID}, &created)
+	if created.User.TrafficReset != "day" {
+		t.Fatalf("покупатель запомнил сброс %q", created.User.TrafficReset)
+	}
+	woke := time.Now().AddDate(1, 0, 0)
+	if ids := h.resetDue(woke); len(ids) != 1 {
+		t.Fatalf("после года сброшено %d раз, ожидался один", len(ids))
+	}
+	next := h.getUser(created.User.ID).TrafficResetAt
+	if next == nil || !next.After(woke) || next.Sub(woke) > 24*time.Hour {
+		t.Fatalf("следующий суточный сброс %v, а проснулись %v", next, woke)
+	}
+}
+
+// Сброс по расписанию виден в журнале с видом сброса: продавец, которого
+// спросили «почему у меня опять ноль», должен найти ответ, не читая код.
+func TestScheduledResetIsInTheJournalWithItsKind(t *testing.T) {
+	h := newHarness(t)
+	plan := h.createPlan(map[string]any{"name": "Неделя по 10 ГБ", "days": 0, "traffic_limit": 10 * gb, "traffic_reset": "week"})
+	var created createUserResponse
+	h.do(http.MethodPost, "/api/v1/users", adminToken, map[string]any{"label": "Ева", "plan_id": plan.ID}, &created)
+	h.resetDue(created.User.TrafficResetAt.Add(time.Minute))
+
+	var out struct {
+		Events []panel.Event `json:"events"`
+	}
+	h.do(http.MethodGet, "/api/v1/events?limit=50", adminToken, nil, &out)
+	for _, e := range out.Events {
+		if e.Action == panel.EventUserReset && e.Actor == panel.ActorSchedule && e.UserID == created.User.ID && e.Detail == "еженедельный" {
+			return
+		}
+	}
+	t.Fatalf("сброса по расписанию нет в журнале: %+v", out.Events)
 }

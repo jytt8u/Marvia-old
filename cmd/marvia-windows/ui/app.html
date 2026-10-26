@@ -1920,6 +1920,7 @@
                 <ol class="diag-steps" id="diag-steps"></ol>
                 <div class="log-act" id="diag-after" hidden>
                   <button class="chip" id="diag-report" type="button" data-t="diagReport"></button>
+                  <button class="chip" id="diag-save" type="button" data-t="diagSave"></button>
                   <span class="said" id="diag-report-msg"></span>
                 </div>
               </div>
@@ -2336,6 +2337,15 @@
                   <div class="grow"><span class="name" data-t="autostart"></span><span class="sub" data-t="autostartHint"></span><span class="sub" id="autostart-msg"></span></div>
                   <button class="chip" id="autostart" type="button"></button>
                 </div>
+                <!-- Горячая клавиша и тихий режим — поведение значка в трее (traytip.go). -->
+                <div>
+                  <div class="grow"><span class="name" data-t="hotkeyName"></span><span class="sub" data-t="hotkeyHint"></span><span class="sub" id="tray-msg"></span></div>
+                  <button class="chip" id="hotkey" type="button"></button>
+                </div>
+                <div>
+                  <div class="grow"><span class="name" data-t="quietName"></span><span class="sub" data-t="quietHint"></span></div>
+                  <button class="chip" id="quiet" type="button"></button>
+                </div>
                 <!-- Что делает крестик: прячет в трей или закрывает программу. -->
                 <div class="stack">
                   <div class="grow"><span class="name" data-t="closeName"></span><span class="sub" data-t="closeHint"></span><span class="sub" id="close-msg"></span></div>
@@ -2577,6 +2587,12 @@ const T = {
     killSwitchFailed: (e) => "Не встал, туннель работает без него: " + e,
     lanOutside: "Домашняя сеть мимо туннеля",
     lanOutsideHint: "Принтер, сетевой диск или камера — частные адреса 10.x, 172.16–31.x и 192.168.x идут напрямую. Свою подсеть Windows и так ведёт мимо туннеля — это для соседних. В чужом Wi-Fi домашняя сеть чужая: включай осознанно.",
+    hotkeyName: "Горячая клавиша Ctrl+Alt+M",
+    hotkeyHint: "Подключить или отключить из любой программы, не открывая окна.",
+    quietName: "Тихий режим",
+    quietHint: "Без всплывающих уведомлений — только значок.",
+    diagSave: "Сохранить в файл",
+    diagSaved: "Отчёт сохранён в «Загрузки»",
     appsTunnel: "Программы всегда через VPN",
     appsDirect: "Программы всегда мимо VPN",
     appsHint: "Имя файла, как в диспетчере задач: telegram.exe. Сильнее правил сайтов. Действует на новые соединения сразу.",
@@ -2909,6 +2925,12 @@ const T = {
     killSwitchFailed: (e) => "Did not start, the tunnel runs without it: " + e,
     lanOutside: "Home network around the tunnel",
     lanOutsideHint: "Printer, network drive or camera — private addresses 10.x, 172.16–31.x and 192.168.x go directly. Windows already keeps your own subnet outside the tunnel — this is for the neighbouring ones. On someone else's Wi-Fi the home network is theirs: turn it on deliberately.",
+    hotkeyName: "Hotkey Ctrl+Alt+M",
+    hotkeyHint: "Connect or disconnect from any program without opening the window.",
+    quietName: "Quiet mode",
+    quietHint: "No pop-up notifications — just the icon.",
+    diagSave: "Save to file",
+    diagSaved: "Report saved to Downloads",
     appsTunnel: "Programs always through the VPN",
     appsDirect: "Programs always around the VPN",
     appsHint: "The file name, as in Task Manager: telegram.exe. Stronger than site rules. Applies to new connections at once.",
@@ -4744,6 +4766,30 @@ on("autostart", "click", async () => {
 });
 paintAutostart();
 
+// Значок в трее: горячая клавиша и тихий режим.
+async function paintTray() {
+  const d = L();
+  try {
+    const p = await api("GET", "api/tray");
+    $("hotkey").textContent = p.hotkey ? d.autostartOn : d.autostartOff;
+    $("hotkey").dataset.on = String(!!p.hotkey);
+    $("quiet").textContent = p.quiet ? d.autostartOn : d.autostartOff;
+    $("quiet").dataset.on = String(!!p.quiet);
+  } catch (_) { /* покажем при следующем заходе */ }
+}
+for (const id of ["hotkey", "quiet"]) {
+  on(id, "click", async () => {
+    $("tray-msg").textContent = "";
+    try {
+      await api("POST", "api/tray", id === "hotkey" ? { hotkey: $("hotkey").dataset.on !== "true" } : { quiet: $("quiet").dataset.on !== "true" });
+    } catch (err) {
+      $("tray-msg").textContent = err.message;
+    }
+    paintTray();
+  });
+}
+paintTray();
+
 // Крестик: состояние у программы — она и решает, что делать по закрытию.
 async function paintClose() {
   try {
@@ -5702,6 +5748,14 @@ async function runDiag() {
   $("diag-after").hidden = false;
 }
 on("diag-run", "click", runDiag);
+on("diag-save", "click", async () => {
+  try {
+    await api("POST", "api/report/save");
+    $("diag-report-msg").textContent = L().diagSaved;
+  } catch (e) {
+    $("diag-report-msg").textContent = e.message;
+  }
+});
 on("diag-report", "click", async () => {
   try {
     await api("POST", "api/report/copy");

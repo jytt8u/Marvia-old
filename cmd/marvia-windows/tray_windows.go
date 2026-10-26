@@ -48,6 +48,8 @@ var (
 	procGetModuleHandleW         = kernel32.NewProc("GetModuleHandleW")
 	procUnregisterClassW         = user32.NewProc("UnregisterClassW")
 	procRegisterWindowMessageW   = user32.NewProc("RegisterWindowMessageW")
+	procRegisterHotKey           = user32.NewProc("RegisterHotKey")
+	procUnregisterHotKey         = user32.NewProc("UnregisterHotKey")
 )
 
 const (
@@ -145,6 +147,44 @@ type tray struct {
 	onLink    func(string)
 	onMenu    func(id int)
 	menuState func() (connected bool, hasAccount bool)
+
+	// onHotkey — нажата горячая клавиша; hotkey — зарегистрирована ли она.
+	onHotkey func()
+	hotkey   bool
+	// hotkeyBusy — клавишу уже держит другая программа: пробовать снова
+	// каждые три секунды незачем, хватит одной строки в журнале.
+	hotkeyBusy bool
+}
+
+// Горячая клавиша — Ctrl+Alt+M: подключить или отключить, не открывая окна.
+// M — Marvia; сочетание редкое, и чужие программы его обычно не держат.
+const (
+	hotkeyID     = 1
+	wmHotkey     = 0x0312
+	modAlt       = 0x0001
+	modControl   = 0x0002
+	modNoRepeat  = 0x4000
+	hotkeyLetter = 'M'
+)
+
+// SetHotkey ставит или снимает клавишу. Зовётся из потока окна: Windows
+// принимает регистрацию только от потока, создавшего окно значка.
+func (t *tray) SetHotkey(on bool) (busy bool) {
+	if on == t.hotkey || (on && t.hotkeyBusy) {
+		return false
+	}
+	if !on {
+		_, _, _ = procUnregisterHotKey.Call(t.hwnd, hotkeyID)
+		t.hotkey = false
+		return false
+	}
+	r, _, _ := procRegisterHotKey.Call(t.hwnd, hotkeyID, modControl|modAlt|modNoRepeat, hotkeyLetter)
+	if r == 0 {
+		t.hotkeyBusy = true
+		return true
+	}
+	t.hotkey = true
+	return false
 }
 
 // newTray вешает значок. Зовётся из потока цикла сообщений.
@@ -294,6 +334,12 @@ func (t *tray) wndProc(hwnd, msg, wp, lp uintptr) uintptr {
 	}
 	if t.taskbarCreated != 0 && msg == t.taskbarCreated {
 		_, _, _ = procShellNotifyIconW.Call(nimAdd, uintptr(unsafe.Pointer(&t.data)))
+		return 0
+	}
+	if msg == wmHotkey && wp == hotkeyID {
+		if t.onHotkey != nil {
+			t.onHotkey()
+		}
 		return 0
 	}
 	if msg == wmTrayEvent {

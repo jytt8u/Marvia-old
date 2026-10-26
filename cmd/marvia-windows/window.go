@@ -163,9 +163,46 @@ func showWindow(url string, ctl *Controller, log *journal, hidden bool, onWindow
 				case <-time.After(wait):
 				}
 				wait = 30 * time.Minute
+				if quietOn() {
+					continue
+				}
 				if title, text, ok := ctl.TrayReminder(time.Now()); ok {
 					w.Dispatch(func() { t.Balloon(title, text) })
 				}
+			}
+		}()
+
+		// Подсказка у значка и горячая клавиша — раз в три секунды: состояние
+		// меняется не чаще, а настройку клавиши человек может переключить
+		// в окне в любой момент (traytip.go).
+		t.onHotkey = func() {
+			st := ctl.Status()
+			if st.State == StateConnected || st.State == StateConnecting || st.State == StateStalled {
+				go ctl.Disconnect()
+				return
+			}
+			go func() {
+				if err := ctl.Connect(); err != nil {
+					log.add("горячая клавиша: %v", err)
+				}
+			}()
+		}
+		go func() {
+			tick := time.NewTicker(3 * time.Second)
+			defer tick.Stop()
+			for {
+				select {
+				case <-stopReminders:
+					return
+				case <-tick.C:
+				}
+				tip, hot := trayTip(ctl.Status()), hotkeyOn()
+				w.Dispatch(func() {
+					t.Tip(tip)
+					if t.SetHotkey(hot) {
+						log.add("Ctrl+Alt+M уже занята другой программой — горячая клавиша не встала")
+					}
+				})
 			}
 		}()
 	}

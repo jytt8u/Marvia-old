@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/jytt8u/marvia/internal/look"
 	"github.com/jytt8u/marvia/internal/redact"
+	"golang.org/x/sys/windows"
 )
 
 //go:embed ui/app.html
@@ -116,6 +118,7 @@ func serveUI(ctl *Controller, log *journal, onWindow *func(windowRequest)) (stri
 	mux.HandleFunc("POST "+prefix+"/api/fix", u.fix)
 	mux.HandleFunc("POST "+prefix+"/api/check", u.recheck)
 	mux.HandleFunc("POST "+prefix+"/api/report/copy", u.copyReport)
+	mux.HandleFunc("POST "+prefix+"/api/report/save", u.saveReport)
 	mux.HandleFunc("GET "+prefix+"/api/net/where", u.netWhere)
 	mux.HandleFunc("POST "+prefix+"/api/net/sites", u.netSites)
 	mux.HandleFunc("POST "+prefix+"/api/net/speed", u.netSpeed)
@@ -132,6 +135,8 @@ func serveUI(ctl *Controller, log *journal, onWindow *func(windowRequest)) (stri
 	mux.HandleFunc("POST "+prefix+"/api/autostart", u.setAutostart)
 	mux.HandleFunc("GET "+prefix+"/api/close", u.getClose)
 	mux.HandleFunc("POST "+prefix+"/api/close", u.setClose)
+	mux.HandleFunc("GET "+prefix+"/api/tray", u.getTrayPrefs)
+	mux.HandleFunc("POST "+prefix+"/api/tray", u.setTrayPrefs)
 	mux.HandleFunc("GET "+prefix+"/api/keys", u.keys)
 	mux.HandleFunc("POST "+prefix+"/api/keys/use", u.useKey)
 	mux.HandleFunc("POST "+prefix+"/api/keys/remove", u.removeKey)
@@ -266,6 +271,40 @@ func (u *ui) copyReport(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// saveReport кладёт отчёт файлом в «Загрузки» и показывает его в
+// проводнике. Буфер обмена годится для чата, а поддержке по почте или в
+// тикете нужен файл; к тому же длинный отчёт мессенджеры режут.
+func (u *ui) saveReport(w http.ResponseWriter, _ *http.Request) {
+	path, err := saveReportFile(downloadsDir(), u.ctl.Report(), time.Now())
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+		return
+	}
+	_ = exec.Command("explorer.exe", "/select,"+path).Start()
+	writeJSON(w, http.StatusOK, map[string]string{"path": path})
+}
+
+// downloadsDir — папка «Загрузки», а без неё — временная.
+func downloadsDir() string {
+	dir, err := windows.KnownFolderPath(windows.FOLDERID_Downloads, 0)
+	if err != nil || dir == "" {
+		return os.TempDir()
+	}
+	return dir
+}
+
+// saveReportFile пишет отчёт в dir. Имя с датой и временем: два отчёта
+// подряд не затирают друг друга.
+func saveReportFile(dir, report string, now time.Time) (string, error) {
+	path := filepath.Join(dir, "marvia-report-"+now.Format("2006-01-02-150405")+".txt")
+	// BOM — чтобы «Блокнот» постарше не принял русский текст за кракозябры.
+	body := strings.ReplaceAll(report, "\n", "\r\n")
+	if err := os.WriteFile(path, append([]byte{0xef, 0xbb, 0xbf}, body...), 0o600); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 // recheck — «Проверить ещё раз».
@@ -509,6 +548,54 @@ func (u *ui) removeKey(w http.ResponseWriter, r *http.Request) {
 const closeSetting = "close"
 
 func closeQuits() bool { return readUISetting(closeSetting) == "quit" }
+
+// Настройки трея: горячая клавиша включена, пока её не выключили, тихий
+// режим — наоборот (traytip.go).
+const (
+	hotkeySetting = "hotkey"
+	quietSetting  = "quiet"
+)
+
+func hotkeyOn() bool { return readUISetting(hotkeySetting) != "off" }
+
+// quietOn — тихий режим: ни одного всплывающего уведомления, только значок.
+// Для тех, у кого программа стоит на рабочем ПК и уведомления мешают.
+func quietOn() bool { return readUISetting(quietSetting) == "on" }
+
+func (u *ui) getTrayPrefs(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"hotkey": hotkeyOn(), "quiet": quietOn()})
+}
+
+func (u *ui) setTrayPrefs(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Hotkey *bool `json:"hotkey"`
+		Quiet  *bool `json:"quiet"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<12)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": say("badRequest")})
+		return
+	}
+	flag := func(name string, on bool, yes, no string) error {
+		value := no
+		if on {
+			value = yes
+		}
+		return writeUISetting(name, value)
+	}
+	if body.Hotkey != nil {
+		if err := flag(hotkeySetting, *body.Hotkey, "on", "off"); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+	}
+	if body.Quiet != nil {
+		if err := flag(quietSetting, *body.Quiet, "on", "off"); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+	}
+	u.getTrayPrefs(w, r)
+}
 
 func (u *ui) getClose(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"quit": closeQuits()})

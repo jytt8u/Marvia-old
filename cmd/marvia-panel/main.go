@@ -272,6 +272,8 @@ func run(opts options) error {
 	// Ежемесячный сброс трафика у купивших по тарифу с ним; см.
 	// internal/panel/reset.go.
 	go api.KeepTrafficReset(ctx)
+	// Очередь обновления нод — по одной; см. internal/panel/fleet.go.
+	go api.KeepRolling(ctx)
 
 	go func() {
 		<-ctx.Done()

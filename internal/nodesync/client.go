@@ -219,6 +219,7 @@ func (c *Client) ReportUsage(ctx context.Context, report map[string]users.Usage,
 		if s := c.takeGuardStats(); s.ByRate+s.ByOpen+s.ByBlock > 0 {
 			body["guard"] = s
 		}
+		body["sys"] = readSysStat()
 	}
 	err := c.postUsage(ctx, body)
 	var old *oldPanelError
@@ -228,6 +229,7 @@ func (c *Client) ReportUsage(ctx context.Context, report map[string]users.Usage,
 		delete(body, "version")
 		delete(body, "arch")
 		delete(body, "guard")
+		delete(body, "sys")
 		err = c.postUsage(ctx, body)
 	}
 	return err

@@ -97,6 +97,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/promos/{id}", a.admin(a.deletePromo))
 	mux.HandleFunc("PUT /api/v1/referral", a.admin(a.setReferral))
 	mux.HandleFunc("GET /api/v1/report", a.scoped(ScopeRead, a.monthReport))
+	mux.HandleFunc("GET /api/v1/night-speed", a.scoped(ScopeRead, a.getNightSpeed))
+	mux.HandleFunc("PUT /api/v1/night-speed", a.admin(a.setNightSpeed))
 	mux.HandleFunc("GET /api/v1/bot-texts", a.scoped(ScopeRead, a.getBotTexts))
 	mux.HandleFunc("PUT /api/v1/bot-texts", a.admin(a.setBotTexts))
 	mux.HandleFunc("POST /api/v1/qr", a.scoped(ScopeUsers, a.qrCode))
@@ -941,6 +943,9 @@ func (a *API) nodeUsage(w http.ResponseWriter, r *http.Request, n Node) {
 		// Guard — сколько соединений нода отклонила с прошлого отчёта:
 		// только числа, адресов нода не присылает.
 		Guard connguard.Stats `json:"guard"`
+
+		// Sys — нагрузка машины ноды (fleet.go).
+		Sys NodeSys `json:"sys"`
 	}
 	if !decodeFromNode(w, r, &body) {
 		return
@@ -953,6 +958,16 @@ func (a *API) nodeUsage(w http.ResponseWriter, r *http.Request, n Node) {
 	}
 	if err := a.store.ReportNodeBuild(r.Context(), n.ID, clip(body.Version, 40), clip(body.Arch, 16)); err != nil {
 		log.Printf("версия ноды %d не сохранилась: %v", n.ID, err)
+	}
+	// Нода могла только что дообновиться — очередь идёт дальше сразу, а не
+	// через минуту (fleet.go).
+	if body.Version != "" {
+		if _, err := a.store.RollNodeUpgrades(r.Context(), time.Now()); err != nil {
+			log.Printf("очередь обновления нод: %v", err)
+		}
+	}
+	if err := a.store.ReportNodeSys(r.Context(), n.ID, body.Sys, time.Now()); err != nil {
+		log.Printf("нагрузка ноды %d не сохранилась: %v", n.ID, err)
 	}
 
 	// Пишем, только когда список и правда изменился: отчёт приходит каждые

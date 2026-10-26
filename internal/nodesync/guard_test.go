@@ -104,3 +104,12 @@ func TestNodeReportsRejectedCountsWithoutAddresses(t *testing.T) {
 		}
 	}
 }
+
+// Память из /proc/meminfo — в байтах, а не в килобайтах, как она там
+// записана: иначе панель показала бы сервер в тысячу раз меньше.
+func TestMeminfoIsReadInBytes(t *testing.T) {
+	total, avail := parseMeminfo([]byte("MemTotal:        2014320 kB\nMemFree:          112204 kB\nMemAvailable:    1203640 kB\n"))
+	if total != 2014320*1024 || avail != 1203640*1024 {
+		t.Fatalf("память: всего %d, свободно %d", total, avail)
+	}
+}

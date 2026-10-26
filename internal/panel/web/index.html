@@ -2778,6 +2778,7 @@ function plansSheet() {
     btn(d.plan.add, "go", () => planSheet(null)),
     btn(d.sales.promos, "", promosSheet),
     btn(d.sales.referral, "", referralSheet),
+    btn(d.night.title, "", nightSheet),
     btn(d.act.close, "", closeSheet),
   ]);
 }
@@ -2817,6 +2818,29 @@ function promosSheet() {
         await api("/api/v1/promos", "POST", body);
         toast(d.sales.promoAdded);
         promosSheet();
+      })),
+      btn(d.act.back, "", plansSheet),
+    ]);
+  });
+}
+
+// nightSheet — ночью без потолка скорости (fleet.go).
+function nightSheet() {
+  act(async () => {
+    const d = L();
+    const res = await api("/api/v1/night-speed");
+    const n = res.night_speed || { enabled: false, from: 1, until: 7 };
+    const on = el("input", { id: "ns-on", type: "checkbox" });
+    on.checked = !!n.enabled;
+    sheet(d.night.title, [
+      el("fieldset", { cls: "kinds" }, el("label", {}, on, el("span", { text: d.night.on }))),
+      field(d.night.from, "ns-from", "number", n.enabled ? n.from : 1),
+      field(d.night.until, "ns-until", "number", n.enabled ? n.until : 7),
+    ], [
+      btn(d.plan.save, "go", () => act(async () => {
+        await api("/api/v1/night-speed", "PUT", { enabled: on.checked, from: num("ns-from"), until: num("ns-until") });
+        toast(d.plan.saved);
+        plansSheet();
       })),
       btn(d.act.back, "", plansSheet),
     ]);
@@ -3576,6 +3600,11 @@ function nodeSheet(node) {
     field(d.node.maintFrom, "nd-mfrom", "datetime-local", localInput(node.maint_from)),
     field(d.node.maintUntil, "nd-muntil", "datetime-local", localInput(node.maint_until)),
   ];
+  if (node.sys && node.sys.cpus) {
+    const s = node.sys;
+    const mem = s.mem_total ? " · " + d.node.mem(bytes(s.mem_total - s.mem_avail), bytes(s.mem_total)) : "";
+    stateFacts.push([d.node.load, d.node.loadText(s.load.toFixed(2), s.cpus) + mem]);
+  }
   if (node.monthly_limit) {
     stateFacts.push([d.node.hoster, bytes(node.month_used || 0) + d.user.of + bytes(node.monthly_limit)]);
   }
@@ -4238,6 +4267,10 @@ const TEXTS = {
         "user.traffic_low": "Трафик на исходе", "user.traffic_exhausted": "Трафик кончился",
       },
     },
+    night: {
+      title: "Ночная скорость", on: "Ночью без ограничения скорости у всех",
+      from: "С какого часа (по Москве)", until: "До какого часа",
+    },
     sales: {
       promos: "Промокоды", referral: "Рефералы",
       promosIntro: "Код даёт дни и гигабайты — один раз на человека.",
@@ -4410,7 +4443,7 @@ const TEXTS = {
         "plan.create": "новый тариф", "plan.update": "правка тарифа", "plan.delete": "тариф удалён",
         "panel.upgrade": "обновление панели",
         "nodes.upgrade": "обновление нод",
-        "autoupdate.update": "автообновление", "guard.update": "защита нод", "user.freeze": "заморозка", "user.unfreeze": "разморозка", "user.devices": "сброс устройств", "promo.create": "заведён промокод", "promo.delete": "удалён промокод", "user.promo": "применён промокод", "referral.update": "награда за приглашённых", "user.referral": "награда за приглашённого", "bot_texts.update": "тексты для бота", "panel.login": "вход в панель", "panel.restore": "восстановление из копии", "users.export": "выгрузка клиентов",
+        "autoupdate.update": "автообновление", "guard.update": "защита нод", "user.freeze": "заморозка", "user.unfreeze": "разморозка", "user.devices": "сброс устройств", "promo.create": "заведён промокод", "promo.delete": "удалён промокод", "user.promo": "применён промокод", "referral.update": "награда за приглашённых", "user.referral": "награда за приглашённого", "bot_texts.update": "тексты для бота", "panel.login": "вход в панель", "panel.restore": "восстановление из копии", "night_speed.update": "ночная скорость", "users.export": "выгрузка клиентов",
       },
     },
     updates: {
@@ -4432,7 +4465,7 @@ const TEXTS = {
         failed: "последнее обновление не удалось",
       },
       restarting: "панель перезапускается на новой версии…",
-      asked: (n, v) => n + " " + pluralRU(n, "нода получит", "ноды получат", "нод получат") + " просьбу обновиться до " + v + " в течение минуты",
+      asked: (n, v) => n + " " + pluralRU(n, "нода встала", "ноды встали", "нод встали") + " в очередь на " + v + ": обновляются по одной, клиенты тем временем на соседних",
       noneToAsk: "Все включённые ноды уже на последней версии",
       checkNow: "Проверить сейчас", checking: "Проверяю…",
       steps: ["Просьба", "Выпуск", "Подпись", "Установка", "Перезапуск", "Готово"],
@@ -4444,7 +4477,7 @@ const TEXTS = {
       checked: (m) => m < 1 ? "релиз проверен только что" : "релиз проверен " + m + " мин назад",
       upAll: "Обновить всё",
       confirmAll: (v) => "Панель и все отставшие ноды обновятся до " + v + ". Ноды перезапускаются на секунды, панель — на полминуты; страница подождёт.",
-      allAsked: (n, p) => (p ? "Панель обновляется" : "Панель уже на последней версии") + "; " + (n ? n + " " + pluralRU(n, "нода получит", "ноды получат", "нод получат") + " просьбу в течение минуты" : "все ноды уже на последней версии"),
+      allAsked: (n, p) => (p ? "Панель обновляется" : "Панель уже на последней версии") + "; " + (n ? n + " " + pluralRU(n, "нода встала", "ноды встали", "нод встали") + " в очередь — обновляются по одной" : "все ноды уже на последней версии"),
       log: "Журнал последнего обновления",
       latestErr: (e) => "Не удалось узнать последний релиз: " + e,
       nodesNote: "Нода, поставленная до версии 0.12, версию не сообщает и просьбу не услышит: такую обнови один раз той же командой на её сервере.",
@@ -4644,7 +4677,8 @@ const TEXTS = {
       groups: ["Группы", "Для кого нода, через запятую; пусто — для всех"],
       planGroup: ["Группа нод", "Пусто — только ноды для всех"],
       maintFrom: "Обслуживание с", maintUntil: "Обслуживание до (пусто — без окна)",
-      maintEnd: "Закончить обслуживание", hoster: "У хостера за месяц", maint: "Обслуживание", maintNow: "идёт: ", maintPlanned: "назначено: ",
+      maintEnd: "Закончить обслуживание", hoster: "У хостера за месяц",
+      load: "Нагрузка", loadText: (l, c) => l + " на " + c + " " + pluralRU(c, "ядро", "ядра", "ядер"), mem: (u, t) => "память " + u + " из " + t, maint: "Обслуживание", maintNow: "идёт: ", maintPlanned: "назначено: ",
       fpDefault: "chrome — по умолчанию",
       byIP: "По IP", countryAuto: "Пусто — панель узнает по IP сама",
       secProto: "Протокол", secState: "Состояние",
@@ -4801,6 +4835,10 @@ const TEXTS = {
         "user.create": "New client", "user.renew": "Renewal", "user.expired": "Term ended",
         "user.traffic_low": "Traffic running low", "user.traffic_exhausted": "Traffic used up",
       },
+    },
+    night: {
+      title: "Night speed", on: "No speed cap for anyone at night",
+      from: "From hour (Moscow time)", until: "Until hour",
     },
     sales: {
       promos: "Promo codes", referral: "Referrals",
@@ -4974,7 +5012,7 @@ const TEXTS = {
         "plan.create": "new plan", "plan.update": "plan edited", "plan.delete": "plan deleted",
         "panel.upgrade": "panel upgrade",
         "nodes.upgrade": "nodes upgrade",
-        "autoupdate.update": "auto-update", "guard.update": "node protection", "user.freeze": "frozen", "user.unfreeze": "unfrozen", "user.devices": "devices reset", "promo.create": "promo code added", "promo.delete": "promo code deleted", "user.promo": "promo code applied", "referral.update": "referral reward", "user.referral": "referral bonus", "bot_texts.update": "bot messages", "panel.login": "panel sign-in", "panel.restore": "restored from backup", "users.export": "clients exported",
+        "autoupdate.update": "auto-update", "guard.update": "node protection", "user.freeze": "frozen", "user.unfreeze": "unfrozen", "user.devices": "devices reset", "promo.create": "promo code added", "promo.delete": "promo code deleted", "user.promo": "promo code applied", "referral.update": "referral reward", "user.referral": "referral bonus", "bot_texts.update": "bot messages", "panel.login": "panel sign-in", "panel.restore": "restored from backup", "night_speed.update": "night speed", "users.export": "clients exported",
       },
     },
     updates: {
@@ -4996,7 +5034,7 @@ const TEXTS = {
         failed: "the last upgrade failed",
       },
       restarting: "the panel is restarting on the new version…",
-      asked: (n, v) => n + " " + (n === 1 ? "node gets" : "nodes get") + " the request to upgrade to " + v + " within a minute",
+      asked: (n, v) => n + " " + (n === 1 ? "node is" : "nodes are") + " queued for " + v + ": they upgrade one at a time while clients use the others",
       noneToAsk: "All enabled nodes are already on the latest version",
       checkNow: "Check now", checking: "Checking…",
       steps: ["Request", "Release", "Signature", "Install", "Restart", "Done"],
@@ -5008,7 +5046,7 @@ const TEXTS = {
       checked: (m) => m < 1 ? "release checked just now" : "release checked " + m + " min ago",
       upAll: "Upgrade everything",
       confirmAll: (v) => "The panel and all outdated nodes will be upgraded to " + v + ". Nodes restart for a few seconds, the panel for about half a minute; the page will wait.",
-      allAsked: (n, p) => (p ? "The panel is upgrading" : "The panel is already on the latest version") + "; " + (n ? n + " " + (n === 1 ? "node gets" : "nodes get") + " the request within a minute" : "all nodes are already on the latest version"),
+      allAsked: (n, p) => (p ? "The panel is upgrading" : "The panel is already on the latest version") + "; " + (n ? n + " " + (n === 1 ? "node is" : "nodes are") + " queued — one at a time" : "all nodes are already on the latest version"),
       log: "Log of the last upgrade",
       latestErr: (e) => "Could not learn the latest release: " + e,
       nodesNote: "A node installed before 0.12 does not report its version and will not hear the request: upgrade it once with the same command on its server.",
@@ -5208,7 +5246,8 @@ const TEXTS = {
       groups: ["Groups", "Who the node is for, comma-separated; empty — everyone"],
       planGroup: ["Node group", "Empty — only nodes for everyone"],
       maintFrom: "Maintenance from", maintUntil: "Maintenance until (empty — none)",
-      maintEnd: "End maintenance", hoster: "Hoster this month", maint: "Maintenance", maintNow: "in progress: ", maintPlanned: "scheduled: ",
+      maintEnd: "End maintenance", hoster: "Hoster this month",
+      load: "Load", loadText: (l, c) => l + " on " + c + (c === 1 ? " core" : " cores"), mem: (u, t) => "memory " + u + " of " + t, maint: "Maintenance", maintNow: "in progress: ", maintPlanned: "scheduled: ",
       fpDefault: "chrome — default",
       byIP: "By IP", countryAuto: "Empty — the panel finds it by IP",
       secProto: "Protocol", secState: "State",

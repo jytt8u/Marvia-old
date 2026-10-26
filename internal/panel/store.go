@@ -184,6 +184,9 @@ type Node struct {
 	// Groups — для кого нода: пусто — для всех (nodeplan.go).
 	Groups []string `json:"groups,omitempty"`
 
+	// Sys — нагрузка машины по последнему отчёту ноды (fleet.go).
+	Sys *NodeSys `json:"sys,omitempty"`
+
 	// Version и Arch — сборка ноды, как она сама сообщила в последнем
 	// отчёте. Пусто у нод старше этой возможности: они версию не шлют.
 	Version string `json:"version,omitempty"`
@@ -475,6 +478,13 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE nodes ADD COLUMN node_groups TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN node_group TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE plans ADD COLUMN node_group TEXT NOT NULL DEFAULT ''`,
+		// Нагрузка машин нод и очередь обновления (fleet.go).
+		`ALTER TABLE nodes ADD COLUMN sys_load REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE nodes ADD COLUMN sys_cpus INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE nodes ADD COLUMN sys_mem_total INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE nodes ADD COLUMN sys_mem_avail INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE nodes ADD COLUMN sys_at TEXT`,
+		`ALTER TABLE nodes ADD COLUMN upgrade_asked TEXT`,
 		`CREATE TABLE IF NOT EXISTS node_guard (node_id INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE, hour TEXT NOT NULL, by_rate INTEGER NOT NULL DEFAULT 0, by_open INTEGER NOT NULL DEFAULT 0, by_block INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (node_id, hour))`,
 	}
 
@@ -1173,7 +1183,8 @@ func (s *Store) GetNode(ctx context.Context, id int64) (Node, error) {
 func (s *Store) queryNodes(ctx context.Context, where string, args ...any) ([]Node, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, name, country, address, sni, sni_extra, public_key, reality_public_key, reality_short_id, ws_path, quic, enabled, last_seen, created_at, version, arch, upgrade_to, fingerprint, COALESCE(exit_id, 0),
-		        monthly_limit, limit_day, maint_from, maint_until, node_groups
+		        monthly_limit, limit_day, maint_from, maint_until, node_groups,
+		        sys_load, sys_cpus, sys_mem_total, sys_mem_avail, sys_at
 		 FROM nodes `+where+` ORDER BY id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("чтение нод: %w", err)
@@ -1192,12 +1203,19 @@ func (s *Store) queryNodes(ctx context.Context, where string, args ...any) ([]No
 			mFrom     sql.NullString
 			mUntil    sql.NullString
 			groups    string
+			sys       NodeSys
+			sysAt     sql.NullString
 		)
 		if err := rows.Scan(&n.ID, &n.Name, &n.Country, &n.Address, &n.SNI, &sniExtra, &n.PublicKey,
 			&n.RealityPublicKey, &n.RealityShortID, &n.WSPath, &quicOn, &enabled, &lastSeen, &createdAt,
 			&n.Version, &n.Arch, &n.UpgradeTo, &n.Fingerprint, &n.ExitID,
-			&n.MonthlyLimit, &n.LimitDay, &mFrom, &mUntil, &groups); err != nil {
+			&n.MonthlyLimit, &n.LimitDay, &mFrom, &mUntil, &groups,
+			&sys.Load, &sys.CPUs, &sys.MemTotal, &sys.MemAvail, &sysAt); err != nil {
 			return nil, err
+		}
+		if at := parseNullTime(sysAt); at != nil {
+			sys.At = *at
+			n.Sys = &sys
 		}
 		n.SNIExtra = splitNames(sniExtra)
 		n.MaintFrom, n.MaintUntil = parseNullTime(mFrom), parseNullTime(mUntil)
@@ -1502,17 +1520,26 @@ func (s *Store) RequestNodeUpgrade(ctx context.Context, target string) (int, err
 	if err != nil {
 		return 0, err
 	}
-	asked := 0
+	// Не всем разом, а по очереди (fleet.go): здесь — сколько нод встанет в
+	// очередь, а саму просьбу получит первая.
+	queued := 0
 	for _, n := range nodes {
-		if !n.Enabled || n.UpgradeTo == target || !OlderVersion(n.Version, target) {
-			continue
+		if n.Enabled && OlderVersion(n.Version, target) {
+			queued++
 		}
-		if _, err := s.db.ExecContext(ctx, `UPDATE nodes SET upgrade_to = ? WHERE id = ?`, target, n.ID); err != nil {
-			return asked, err
-		}
-		asked++
 	}
-	return asked, nil
+	if queued == 0 {
+		return 0, nil
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT INTO settings (key, value) VALUES ('rolling_upgrade', ?)
+		ON CONFLICT (key) DO UPDATE SET value = excluded.value`, target); err != nil {
+		return 0, err
+	}
+	if _, err := s.RollNodeUpgrades(ctx, time.Now()); err != nil {
+		return 0, err
+	}
+	return queued, nil
 }
 
 // OlderVersion сохраняет API панели, но порядок берёт из общего пакета:
@@ -1539,6 +1566,7 @@ func (s *Store) NodeUsers(ctx context.Context, nodeID int64) ([]users.User, erro
 		return nil, err
 	}
 	groups := splitTags(groupsRaw)
+	night := readNightSpeed(ctx, s.db).active(time.Now())
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT u.id, u.enabled, u.expires_at, u.traffic_limit, u.max_ips, u.max_conns, u.speed_limit,
 		       u.devices_from, u.node_group, c.kind, c.secret,
@@ -1600,6 +1628,11 @@ func (s *Store) NodeUsers(ctx context.Context, nodeID int64) ([]users.User, erro
 		// Только время сброса устройств, не адреса: адресов у панели нет.
 		if t := parseNullTime(devices); t != nil && maxIPs > 0 {
 			u.DevicesFrom = *t
+		}
+		// Ночью — без потолка скорости, если продавец так решил (fleet.go).
+		// Нода перечитывает список каждые полминуты и подхватывает окно сама.
+		if night {
+			u.SpeedLimit = 0
 		}
 
 		if limit > 0 {

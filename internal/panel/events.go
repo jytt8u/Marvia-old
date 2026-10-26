@@ -68,6 +68,7 @@ const (
 	EventBotTexts       = "bot_texts.update"
 	EventPanelLogin     = "panel.login"
 	EventPanelRestore   = "panel.restore"
+	EventNightSpeed     = "night_speed.update"
 
 	// ActorBonus — от чьего имени пишется награда за приглашённого: её
 	// выдаёт не админ и не бот, а правило, которое продавец включил.

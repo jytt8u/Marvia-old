@@ -87,6 +87,11 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/users/{id}/freeze", a.scoped(ScopeUsers, a.freezeUser))
 	mux.HandleFunc("POST /api/v1/users/{id}/unfreeze", a.scoped(ScopeUsers, a.unfreezeUser))
 	mux.HandleFunc("POST /api/v1/users/{id}/reset-devices", a.scoped(ScopeUsers, a.resetDevices))
+	mux.HandleFunc("POST /api/v1/users/{id}/promo", a.scoped(ScopeUsers, a.redeemPromo))
+	mux.HandleFunc("GET /api/v1/promos", a.admin(a.listPromos))
+	mux.HandleFunc("POST /api/v1/promos", a.admin(a.createPromo))
+	mux.HandleFunc("DELETE /api/v1/promos/{id}", a.admin(a.deletePromo))
+	mux.HandleFunc("PUT /api/v1/referral", a.admin(a.setReferral))
 	mux.HandleFunc("POST /api/v1/qr", a.scoped(ScopeUsers, a.qrCode))
 	mux.HandleFunc("POST /api/v1/users/bulk", a.scoped(ScopeUsers, a.bulkUsers))
 	mux.HandleFunc("GET /api/v1/users.csv", a.scoped(ScopeRead, a.usersCSV))
@@ -349,7 +354,7 @@ func (a *API) createUser(w http.ResponseWriter, r *http.Request) {
 	// повторе не должен ни падать, ни выдавать второй доступ за ту же оплату.
 	if errors.Is(err, ErrAlreadyExists) {
 		ok(w, map[string]any{
-			"user":    user,
+			"user":    noteFor(r, user),
 			"created": false,
 			"issued":  []Issued{},
 			"links":   a.links(r.Context(), user, nil),
@@ -361,8 +366,12 @@ func (a *API) createUser(w http.ResponseWriter, r *http.Request) {
 			fail(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		if errors.Is(err, ErrUnknownKind) {
+		if errors.Is(err, ErrUnknownKind) || errors.Is(err, ErrTrialNeedsKey) {
 			fail(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if errors.Is(err, ErrTrialUsed) {
+			fail(w, http.StatusConflict, err.Error())
 			return
 		}
 		fail(w, http.StatusInternalServerError, err.Error())

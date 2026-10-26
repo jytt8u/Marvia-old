@@ -103,6 +103,10 @@ func (a *API) renewUser(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if errors.Is(err, ErrTrialRenew) {
+		fail(w, http.StatusConflict, err.Error())
+		return
+	}
 	if err != nil {
 		respondStoreErr(w, err)
 		return

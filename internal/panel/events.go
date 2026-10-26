@@ -60,6 +60,15 @@ const (
 	EventUserUnfreeze   = "user.unfreeze"
 	EventUserDevices    = "user.devices"
 	EventUsersExport    = "users.export"
+	EventPromoCreate    = "promo.create"
+	EventPromoDelete    = "promo.delete"
+	EventUserPromo      = "user.promo"
+	EventReferralUpdate = "referral.update"
+	EventUserReferral   = "user.referral"
+
+	// ActorBonus — от чьего имени пишется награда за приглашённого: её
+	// выдаёт не админ и не бот, а правило, которое продавец включил.
+	ActorBonus = "bonus"
 )
 
 // ActorAdmin — действие сделано админским токеном. Ключи ботов записываются

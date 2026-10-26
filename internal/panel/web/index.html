@@ -2722,6 +2722,7 @@ function planLine(plan) {
     plan.max_ips ? d.plan.devices(plan.max_ips) : d.plan.noDevices,
     plan.speed_limit ? Math.round(plan.speed_limit / 125000) + d.user.mbit : "",
     plan.note || "",
+    plan.trial ? L().sales.trialMark : "",
   ].filter(Boolean).join(" · ");
 }
 
@@ -2753,13 +2754,79 @@ function plansSheet() {
   }
   sheet(d.plan.title, parts, [
     btn(d.plan.add, "go", () => planSheet(null)),
+    btn(d.sales.promos, "", promosSheet),
+    btn(d.sales.referral, "", referralSheet),
     btn(d.act.close, "", closeSheet),
   ]);
 }
 
+// promosSheet — промокоды: дни и гигабайты, а не скидка (sales.go).
+function promosSheet() {
+  act(async () => {
+    const d = L();
+    const res = await api("/api/v1/promos");
+    const parts = [el("div", { cls: "note", text: (res.promos || []).length ? d.sales.promosIntro : d.sales.promosEmpty })];
+    for (const p of res.promos || []) {
+      const gave = [p.days ? "+" + d.plan.days(p.days) : "", p.traffic ? "+" + bytes(p.traffic) : ""].filter(Boolean).join(" · ");
+      const uses = p.max_uses ? p.uses + " / " + p.max_uses : String(p.uses);
+      const until = p.expires_at ? " · " + d.sales.until + shortDate(p.expires_at) : "";
+      parts.push(el("div", { cls: "line" },
+        el("div", { cls: "note", text: p.code + " — " + gave + " · " + d.sales.used + uses + until }),
+        btn(d.user.remove, "bad", () => act(async () => {
+          await api("/api/v1/promos/" + p.id, "DELETE");
+          promosSheet();
+        }))));
+    }
+    parts.push(
+      field(d.sales.code[0], "pr-code", "text", "", d.sales.code[1]),
+      field(d.sales.days, "pr-days", "number", 7),
+      field(d.sales.gb, "pr-gb", "number", 0),
+      field(d.sales.maxUses[0], "pr-uses", "number", 0, d.sales.maxUses[1]),
+      field(d.sales.lastDay, "pr-until", "date", ""),
+    );
+    sheet(d.sales.promos, parts, [
+      btn(d.sales.addPromo, "go", () => act(async () => {
+        const until = val("pr-until");
+        const body = {
+          code: val("pr-code"), days: num("pr-days"),
+          traffic: Math.round(num("pr-gb") * 1024 ** 3), max_uses: num("pr-uses"),
+        };
+        if (until) body.expires_at = new Date(until + "T23:59:00").toISOString();
+        await api("/api/v1/promos", "POST", body);
+        toast(d.sales.promoAdded);
+        promosSheet();
+      })),
+      btn(d.act.back, "", plansSheet),
+    ]);
+  });
+}
+
+// referralSheet — сколько дней дать тому, кто привёл платного покупателя.
+// Кто кого привёл, бот передаёт полем referrer при продаже.
+function referralSheet() {
+  act(async () => {
+    const d = L();
+    const res = await api("/api/v1/promos");
+    const days = (res.referral && res.referral.days) || 0;
+    sheet(d.sales.referral, [
+      el("div", { cls: "note", text: d.sales.referralIntro }),
+      field(d.sales.referralDays[0], "rf-days", "number", days, d.sales.referralDays[1]),
+    ], [
+      btn(d.plan.save, "go", () => act(async () => {
+        await api("/api/v1/referral", "PUT", { days: num("rf-days") });
+        toast(d.plan.saved);
+        plansSheet();
+      })),
+      btn(d.act.back, "", plansSheet),
+    ]);
+  });
+}
+
 function planSheet(plan) {
   const d = L();
-  const p = plan || { name: "", days: 30, traffic_limit: 50 * 1024 ** 3, max_ips: 2, speed_limit: 0, note: "", traffic_reset: "" };
+  const p = plan || { name: "", days: 30, traffic_limit: 50 * 1024 ** 3, max_ips: 2, speed_limit: 0, note: "", traffic_reset: "", trial: false };
+  const trial = el("input", { id: "pl-trial", type: "checkbox" });
+  trial.checked = !!p.trial;
   const save = () => act(async () => {
     const body = {
       name: val("pl-name"),
@@ -2769,6 +2836,7 @@ function planSheet(plan) {
       speed_limit: Math.round(num("pl-speed") * 125000),
       note: val("pl-note"),
       traffic_reset: document.getElementById("pl-reset").value,
+      trial: document.getElementById("pl-trial").checked,
     };
     if (plan) await api("/api/v1/plans/" + plan.id, "PATCH", body);
     else await api("/api/v1/plans", "POST", body);
@@ -2800,6 +2868,7 @@ function planSheet(plan) {
     field(d.user.newDays[0], "pl-days", "number", p.days, d.user.newDays[1]),
     field(d.user.newGB[0], "pl-gb", "number", Math.round(p.traffic_limit / 1024 ** 3 * 10) / 10, d.user.newGB[1]),
     el("label", { text: d.plan.resetWhen }, reset),
+    el("fieldset", { cls: "kinds" }, el("label", {}, trial, el("span", { text: d.sales.trialPlan }))),
     field(d.user.newIPs[0], "pl-ips", "number", p.max_ips, d.user.newIPs[1]),
     field(d.user.newSpeed[0], "pl-speed", "number", Math.round(p.speed_limit / 125000), d.user.newSpeed[1]),
     field(d.plan.note[0], "pl-note", "text", p.note || "", d.plan.note[1]),
@@ -2990,6 +3059,11 @@ function userSheet(user) {
   const plan = state.plans.find((p) => p.id === user.plan_id);
   if (plan) facts.splice(1, 0, el("div", { cls: "note", text: d.plan.of + ": " + plan.name }));
   if (user.note) facts.splice(1, 0, el("div", { cls: "note", text: d.user.noteIs + user.note }));
+  if (user.referrals) facts.push(el("div", { cls: "note", text: d.sales.brought(user.referrals) }));
+  if (user.referred_by) {
+    const host = state.users.find((x) => x.id === user.referred_by);
+    facts.push(el("div", { cls: "note", text: d.sales.cameFrom + (host ? host.label || "#" + host.id : "#" + user.referred_by) }));
+  }
   if ((user.tags || []).length) facts.splice(1, 0, el("div", { cls: "note", text: d.user.tagsIs + user.tags.map((x) => "#" + x).join(" ") }));
 
   // Обнулить расход — подарить трафик или исправить ошибку, не трогая срок.
@@ -3056,6 +3130,19 @@ function moreUserSheet(user) {
       el("div", { cls: "note", text: d.user.freezeNote }),
       btn(d.user.freeze, "", () => userAct(user, "freeze", d.user.frozen))));
   }
+  parts.push(el("div", { cls: "line" },
+    el("div", { cls: "note", text: d.sales.applyNote }),
+    btn(d.sales.apply, "", () => {
+      sheet(d.sales.apply, [field(d.sales.code[0], "ap-code", "text", "")], [
+        btn(d.sales.apply, "go", () => act(async () => {
+          const res = await api("/api/v1/users/" + user.id + "/promo", "POST", { code: val("ap-code") });
+          toast(d.sales.applied);
+          await loadAll();
+          userSheet(res.user);
+        })),
+        btn(d.act.back, "", () => moreUserSheet(user)),
+      ]);
+    })));
   // Сбрасывать устройства есть смысл, только когда лимит задан: без него
   // нода адресов не считает вовсе.
   if (user.max_ips) {
@@ -3980,6 +4067,22 @@ const TEXTS = {
     },
 
     cta: { dash: "+ Выдать доступ", clients: "+ Клиент", nodes: "+ Нода", keys: "+ Ключ", plans: "Тарифы", guard: "Защита", export: "Выгрузить CSV" },
+    sales: {
+      promos: "Промокоды", referral: "Рефералы",
+      promosIntro: "Код даёт дни и гигабайты — один раз на человека.",
+      promosEmpty: "Промокодов пока нет. Заведи «LETO7» на +7 дней — и раздай в канале.",
+      until: "до ", used: "применён: ",
+      code: ["Код", "Без пробелов, регистр не важен"], days: "Дней", gb: "Гигабайт", lastDay: "Последний день действия",
+      maxUses: ["Сколько человек", "0 — сколько угодно"],
+      addPromo: "+ Промокод", promoAdded: "Промокод заведён",
+      referralIntro: "Дни за каждого платного друга, за пробного — нет.",
+      referralDays: ["Дней пригласившему", "0 — награды нет"],
+      trialPlan: "Пробный: один раз на человека, только с ключом продавца",
+      trialMark: "пробный",
+      brought: (n) => "Привёл: " + n, cameFrom: "Пришёл от: ",
+      apply: "Применить промокод", applied: "Промокод применён",
+      applyNote: "Дни и гигабайты по коду, один раз на клиента",
+    },
     guard: {
       title: "Защита нод от флуда",
       day: "Отбито соединений за сутки:",
@@ -4116,6 +4219,7 @@ const TEXTS = {
       admin: "админ",
       auto: "автообновление",
       schedule: "по расписанию",
+      bonus: "бонус",
       action: {
         "user.create": "заведён покупатель",
         "user.update": "правка покупателя",
@@ -4135,7 +4239,7 @@ const TEXTS = {
         "plan.create": "новый тариф", "plan.update": "правка тарифа", "plan.delete": "тариф удалён",
         "panel.upgrade": "обновление панели",
         "nodes.upgrade": "обновление нод",
-        "autoupdate.update": "автообновление", "guard.update": "защита нод", "user.freeze": "заморозка", "user.unfreeze": "разморозка", "user.devices": "сброс устройств",
+        "autoupdate.update": "автообновление", "guard.update": "защита нод", "user.freeze": "заморозка", "user.unfreeze": "разморозка", "user.devices": "сброс устройств", "promo.create": "заведён промокод", "promo.delete": "удалён промокод", "user.promo": "применён промокод", "referral.update": "награда за приглашённых", "user.referral": "награда за приглашённого",
       },
     },
     updates: {
@@ -4497,6 +4601,22 @@ const TEXTS = {
     },
 
     cta: { dash: "+ Give access", clients: "+ Client", nodes: "+ Node", keys: "+ Key", plans: "Plans", guard: "Protection", export: "Export CSV" },
+    sales: {
+      promos: "Promo codes", referral: "Referrals",
+      promosIntro: "A code gives days and gigabytes — once per person.",
+      promosEmpty: "No promo codes yet. Add “SUMMER7” for +7 days and share it in your channel.",
+      until: "until ", used: "used: ",
+      code: ["Code", "No spaces, case does not matter"], days: "Days", gb: "Gigabytes", lastDay: "Last valid day",
+      maxUses: ["How many people", "0 — unlimited"],
+      addPromo: "+ Promo code", promoAdded: "Promo code added",
+      referralIntro: "Days for every paying friend, none for a trial one.",
+      referralDays: ["Days for the inviter", "0 — no reward"],
+      trialPlan: "Trial: once per person, only with the seller's key",
+      trialMark: "trial",
+      brought: (n) => "Invited: " + n, cameFrom: "Invited by: ",
+      apply: "Apply promo code", applied: "Promo code applied",
+      applyNote: "Days and gigabytes from a code, once per client",
+    },
     guard: {
       title: "Node flood protection",
       day: "Connections rejected in the last day:",
@@ -4633,6 +4753,7 @@ const TEXTS = {
       admin: "admin",
       auto: "auto-update",
       schedule: "scheduled",
+      bonus: "bonus",
       action: {
         "user.create": "subscriber created",
         "user.update": "subscriber edited",
@@ -4652,7 +4773,7 @@ const TEXTS = {
         "plan.create": "new plan", "plan.update": "plan edited", "plan.delete": "plan deleted",
         "panel.upgrade": "panel upgrade",
         "nodes.upgrade": "nodes upgrade",
-        "autoupdate.update": "auto-update", "guard.update": "node protection", "user.freeze": "frozen", "user.unfreeze": "unfrozen", "user.devices": "devices reset",
+        "autoupdate.update": "auto-update", "guard.update": "node protection", "user.freeze": "frozen", "user.unfreeze": "unfrozen", "user.devices": "devices reset", "promo.create": "promo code added", "promo.delete": "promo code deleted", "user.promo": "promo code applied", "referral.update": "referral reward", "user.referral": "referral bonus",
       },
     },
     updates: {
@@ -6058,7 +6179,7 @@ function renderVals() {
     journal: (state.journal || []).map((e) => ({
       when: journalWhen(e.at),
       actor: e.actor === "admin" ? d18.journal.admin : e.actor === "auto" ? d18.journal.auto
-        : e.actor === "schedule" ? d18.journal.schedule : e.actor,
+        : e.actor === "schedule" ? d18.journal.schedule : e.actor === "bonus" ? d18.journal.bonus : e.actor,
       // Кто делал — меткой: админ нейтрально, автомат акцентом, ключ бота
       // своим именем без цвета.
       actorCls: "pill plain j-actor" + (e.actor === "auto" || e.actor === "schedule" ? " acc" : ""),

@@ -197,6 +197,18 @@ curl -X POST https://panel.example.com/api/v1/users \
 Вместе с `plan_id` поля `expires_at`, `traffic_limit`, `max_ips` и
 `speed_limit` не принимаются: панель ответит 400, а не выберет одно из двух.
 
+**Промокод** — дни и гигабайты один раз на клиента; нет кода или он
+кончился — `404`, уже применён этим клиентом — `409`:
+
+```bash
+curl -X POST https://panel.example.com/api/v1/users/17/promo \n  -H "Authorization: Bearer $MARVIA_KEY" -d '{"code": "LETO7"}'
+```
+
+**Пробный и рефералы.** Тариф с `"trial": true` выдаётся один раз на
+`external_id` — повтор `409`, без `external_id` — `400`. Поле `referrer` в
+`POST /api/v1/users` — `external_id` того, кто привёл: за платного друга он
+получает дни, заданные продавцом.
+
 **Продлить по тарифу** — новый оплаченный период:
 
 ```bash

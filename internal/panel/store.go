@@ -86,6 +86,10 @@ type User struct {
 	// Tags — метки продавца: «семья», «опт» (tags.go).
 	Tags []string `json:"tags,omitempty"`
 
+	// ReferredBy — кто привёл; Referrals — скольких привёл он сам (sales.go).
+	ReferredBy *int64 `json:"referred_by,omitempty"`
+	Referrals  int    `json:"referrals,omitempty"`
+
 	// Online, Devices, LastSeen — на связи ли он прямо сейчас. Заполняются при
 	// чтении из последнего отчёта каждой живой ноды: соединений всего,
 	// адресов за час (только у тех, кому задан лимит устройств — остальным
@@ -437,6 +441,12 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE users ADD COLUMN devices_from TEXT`,
 		`ALTER TABLE users ADD COLUMN note TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN tags TEXT NOT NULL DEFAULT ''`,
+		// Промокоды, пробный период и рефералы (sales.go).
+		`CREATE TABLE IF NOT EXISTS promos (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE COLLATE NOCASE, days INTEGER NOT NULL DEFAULT 0, traffic INTEGER NOT NULL DEFAULT 0, max_uses INTEGER NOT NULL DEFAULT 0, uses INTEGER NOT NULL DEFAULT 0, expires_at TEXT, created_at TEXT NOT NULL)`,
+		`CREATE TABLE IF NOT EXISTS promo_uses (promo_id INTEGER NOT NULL REFERENCES promos(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, at TEXT NOT NULL, PRIMARY KEY (promo_id, user_id))`,
+		`CREATE TABLE IF NOT EXISTS trials (key TEXT NOT NULL PRIMARY KEY, at TEXT NOT NULL)`,
+		`ALTER TABLE plans ADD COLUMN trial INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE users ADD COLUMN referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL`,
 		`CREATE TABLE IF NOT EXISTS node_guard (node_id INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE, hour TEXT NOT NULL, by_rate INTEGER NOT NULL DEFAULT 0, by_open INTEGER NOT NULL DEFAULT 0, by_block INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (node_id, hour))`,
 	}
 
@@ -571,6 +581,12 @@ type CreateUserParams struct {
 	// Tags — метки сразу при продаже: бот знает, что это «опт».
 	Tags []string `json:"tags,omitempty"`
 
+	// Referrer — ключ продавца того, кто привёл покупателя (sales.go).
+	Referrer string `json:"referrer,omitempty"`
+
+	// trial подставляется из пробного тарифа в applyPlan.
+	trial bool
+
 	// trafficReset подставляется из тарифа в applyPlan. Не из запроса: свой
 	// сброс без тарифа боту пока задать негде, и поле в JSON обещало бы то,
 	// чего панель не делает.
@@ -632,6 +648,14 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Пробный — один раз на человека; отметка в той же транзакции, что и
+	// сам покупатель, чтобы два одновременных запроса не получили оба.
+	if p.trial {
+		if err := claimTrialTx(ctx, tx, p.ExternalID, now); err != nil {
+			return User{}, nil, err
+		}
+	}
+
 	res, err := tx.ExecContext(ctx,
 		`INSERT INTO users (label, enabled, expires_at, traffic_limit, max_ips, max_conns, speed_limit, sub_token, created_at, external_id, plan_id, reset_anchor, reset_at, reset_kind, tags)
 		 VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -670,6 +694,11 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 		creds = append(creds, Credential{ID: credID, Kind: kind, Secret: stored, CreatedAt: now})
 	}
 
+	referrer, err := referTx(ctx, tx, id, p.Referrer, !p.trial, now)
+	if err != nil {
+		return User{}, nil, err
+	}
+
 	// Создание и его оповещение неделимы: бот не должен потерять продажу
 	// при перезапуске панели сразу после выдачи доступа.
 	if err := queueUserWebhookTx(ctx, tx, id, EventUserCreate); err != nil {
@@ -677,6 +706,9 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 	}
 	if err := tx.Commit(); err != nil {
 		return User{}, nil, err
+	}
+	if referrer != 0 {
+		s.Record(ctx, Event{Action: EventUserReferral, Actor: ActorBonus, UserID: referrer, Detail: fmt.Sprintf("привёл #%d", id)})
 	}
 
 	user := User{
@@ -947,7 +979,8 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 		                 WHERE p.user_id = u.id AND n.last_seen >= ?), 0),
 		       COALESCE((SELECT SUM(p.ips) FROM presence p JOIN nodes n ON n.id = p.node_id
 		                 WHERE p.user_id = u.id AND n.last_seen >= ?), 0),
-		       u.last_seen, u.reset_at, u.reset_kind, u.frozen_at, u.note, u.tags
+		       u.last_seen, u.reset_at, u.reset_kind, u.frozen_at, u.note, u.tags, u.referred_by,
+		       (SELECT COUNT(*) FROM users r WHERE r.referred_by = u.id)
 		FROM users u ` + where
 
 	// Присутствие считается только по нодам, которые выходили на связь
@@ -975,10 +1008,11 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 			resetAt   sql.NullString
 			frozenAt  sql.NullString
 			tags      string
+			referred  sql.NullInt64
 		)
 		if err := rows.Scan(&u.ID, &u.Label, &enabled, &expires, &u.TrafficLimit,
 			&u.MaxIPs, &u.MaxConns, &u.SpeedLimit, &u.SubToken, &createdAt, &external, &u.Used, &plan,
-			&u.Online, &u.Devices, &seen, &resetAt, &u.TrafficReset, &frozenAt, &u.Note, &tags); err != nil {
+			&u.Online, &u.Devices, &seen, &resetAt, &u.TrafficReset, &frozenAt, &u.Note, &tags, &referred, &u.Referrals); err != nil {
 			return nil, err
 		}
 		u.Enabled = enabled != 0
@@ -986,6 +1020,9 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 		u.TrafficResetAt = parseNullTime(resetAt)
 		u.FrozenAt = parseNullTime(frozenAt)
 		u.Tags = splitTags(tags)
+		if referred.Valid {
+			u.ReferredBy = &referred.Int64
+		}
 		u.ExpiresAt = parseNullTime(expires)
 		u.CreatedAt = parse(createdAt)
 		u.ExternalID = external.String

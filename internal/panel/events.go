@@ -59,6 +59,7 @@ const (
 	EventUserFreeze     = "user.freeze"
 	EventUserUnfreeze   = "user.unfreeze"
 	EventUserDevices    = "user.devices"
+	EventUsersExport    = "users.export"
 )
 
 // ActorAdmin — действие сделано админским токеном. Ключи ботов записываются

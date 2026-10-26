@@ -83,6 +83,9 @@ type User struct {
 	// Note — заметка продавца; ботам не отдаётся (см. visible).
 	Note string `json:"note,omitempty"`
 
+	// Tags — метки продавца: «семья», «опт» (tags.go).
+	Tags []string `json:"tags,omitempty"`
+
 	// Online, Devices, LastSeen — на связи ли он прямо сейчас. Заполняются при
 	// чтении из последнего отчёта каждой живой ноды: соединений всего,
 	// адресов за час (только у тех, кому задан лимит устройств — остальным
@@ -433,6 +436,7 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE users ADD COLUMN frozen_at TEXT`,
 		`ALTER TABLE users ADD COLUMN devices_from TEXT`,
 		`ALTER TABLE users ADD COLUMN note TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN tags TEXT NOT NULL DEFAULT ''`,
 		`CREATE TABLE IF NOT EXISTS node_guard (node_id INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE, hour TEXT NOT NULL, by_rate INTEGER NOT NULL DEFAULT 0, by_open INTEGER NOT NULL DEFAULT 0, by_block INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (node_id, hour))`,
 	}
 
@@ -564,6 +568,9 @@ type CreateUserParams struct {
 	// своими сроком или лимитами не задаётся, см. ErrPlanConflict.
 	PlanID *int64 `json:"plan_id,omitempty"`
 
+	// Tags — метки сразу при продаже: бот знает, что это «опт».
+	Tags []string `json:"tags,omitempty"`
+
 	// trafficReset подставляется из тарифа в applyPlan. Не из запроса: свой
 	// сброс без тарифа боту пока задать негде, и поле в JSON обещало бы то,
 	// чего панель не делает.
@@ -615,6 +622,10 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 		return User{}, nil, err
 	}
 	anchor, next, kind := resetSchedule(p.trafficReset, now)
+	tags, err := cleanTags(p.Tags)
+	if err != nil {
+		return User{}, nil, err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return User{}, nil, err
@@ -622,10 +633,10 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO users (label, enabled, expires_at, traffic_limit, max_ips, max_conns, speed_limit, sub_token, created_at, external_id, plan_id, reset_anchor, reset_at, reset_kind)
-		 VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO users (label, enabled, expires_at, traffic_limit, max_ips, max_conns, speed_limit, sub_token, created_at, external_id, plan_id, reset_anchor, reset_at, reset_kind, tags)
+		 VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.Label, nullTime(p.ExpiresAt.at()), p.TrafficLimit, p.MaxIPs, p.MaxConns, p.SpeedLimit, subToken, format(now),
-		nullString(p.ExternalID), p.PlanID, anchor, next, kind)
+		nullString(p.ExternalID), p.PlanID, anchor, next, kind, joinTags(tags))
 	if err != nil {
 		return User{}, nil, fmt.Errorf("создание пользователя: %w", err)
 	}
@@ -671,7 +682,7 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 	user := User{
 		ID: id, Label: p.Label, Enabled: true, ExpiresAt: p.ExpiresAt.at(),
 		TrafficLimit: p.TrafficLimit, MaxIPs: p.MaxIPs, MaxConns: p.MaxConns, SpeedLimit: p.SpeedLimit,
-		SubToken: subToken, CreatedAt: now, Credentials: creds, PlanID: p.PlanID,
+		SubToken: subToken, CreatedAt: now, Credentials: creds, PlanID: p.PlanID, Tags: tags,
 	}
 	if v, ok := next.(string); ok {
 		at := parse(v)
@@ -698,6 +709,9 @@ type UpdateUserParams struct {
 
 	// Note — заметка продавца, не длиннее maxNote знаков.
 	Note *string `json:"note,omitempty"`
+
+	// Tags — метки целиком: пустой список снимает все.
+	Tags *[]string `json:"tags,omitempty"`
 }
 
 // ErrExpiryConflict — в одном запросе и срок, и «бессрочно».
@@ -718,6 +732,14 @@ func (s *Store) UpdateUser(ctx context.Context, id int64, p UpdateUserParams) (U
 	}
 	if p.ExpiresAt != nil && p.NoExpiry {
 		return User{}, ErrExpiryConflict
+	}
+	if p.Tags != nil {
+		tags, err := cleanTags(*p.Tags)
+		if err != nil {
+			return User{}, err
+		}
+		sets = append(sets, "tags = ?")
+		args = append(args, joinTags(tags))
 	}
 	if p.Note != nil {
 		if len([]rune(*p.Note)) > maxNote {
@@ -925,7 +947,7 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 		                 WHERE p.user_id = u.id AND n.last_seen >= ?), 0),
 		       COALESCE((SELECT SUM(p.ips) FROM presence p JOIN nodes n ON n.id = p.node_id
 		                 WHERE p.user_id = u.id AND n.last_seen >= ?), 0),
-		       u.last_seen, u.reset_at, u.reset_kind, u.frozen_at, u.note
+		       u.last_seen, u.reset_at, u.reset_kind, u.frozen_at, u.note, u.tags
 		FROM users u ` + where
 
 	// Присутствие считается только по нодам, которые выходили на связь
@@ -952,16 +974,18 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 			plan      sql.NullInt64
 			resetAt   sql.NullString
 			frozenAt  sql.NullString
+			tags      string
 		)
 		if err := rows.Scan(&u.ID, &u.Label, &enabled, &expires, &u.TrafficLimit,
 			&u.MaxIPs, &u.MaxConns, &u.SpeedLimit, &u.SubToken, &createdAt, &external, &u.Used, &plan,
-			&u.Online, &u.Devices, &seen, &resetAt, &u.TrafficReset, &frozenAt, &u.Note); err != nil {
+			&u.Online, &u.Devices, &seen, &resetAt, &u.TrafficReset, &frozenAt, &u.Note, &tags); err != nil {
 			return nil, err
 		}
 		u.Enabled = enabled != 0
 		u.LastSeen = parseNullTime(seen)
 		u.TrafficResetAt = parseNullTime(resetAt)
 		u.FrozenAt = parseNullTime(frozenAt)
+		u.Tags = splitTags(tags)
 		u.ExpiresAt = parseNullTime(expires)
 		u.CreatedAt = parse(createdAt)
 		u.ExternalID = external.String

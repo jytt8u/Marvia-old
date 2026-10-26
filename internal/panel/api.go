@@ -74,6 +74,7 @@ func (a *API) Handler() http.Handler {
 	// Управление: пользователи. Это всё, что нужно боту продавца, и ровно
 	// столько прав ему и достаётся.
 	mux.HandleFunc("GET /api/v1/users", a.scoped(ScopeRead, a.listUsers))
+	mux.HandleFunc("GET /api/v1/users/export.csv", a.admin(a.exportUsers))
 	mux.HandleFunc("POST /api/v1/users", a.scoped(ScopeUsers, a.createUser))
 	mux.HandleFunc("GET /api/v1/users/{id}", a.scoped(ScopeRead, a.getUser))
 	mux.HandleFunc("PATCH /api/v1/users/{id}", a.scoped(ScopeUsers, a.updateUser))
@@ -356,7 +357,7 @@ func (a *API) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		if errors.Is(err, ErrPlanConflict) || errors.Is(err, ErrNoSuchPlan) {
+		if errors.Is(err, ErrPlanConflict) || errors.Is(err, ErrNoSuchPlan) || errors.Is(err, ErrBadTags) {
 			fail(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -505,7 +506,7 @@ func (a *API) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := a.store.UpdateUser(r.Context(), id, p.UpdateUserParams)
-	if errors.Is(err, ErrNoteTooLong) || errors.Is(err, ErrExpiryConflict) {
+	if errors.Is(err, ErrNoteTooLong) || errors.Is(err, ErrExpiryConflict) || errors.Is(err, ErrBadTags) {
 		fail(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -1739,6 +1740,9 @@ func updateDetail(p UpdateUserParams, extend string) string {
 	}
 	if p.Note != nil {
 		parts = append(parts, "изменена заметка")
+	}
+	if p.Tags != nil {
+		parts = append(parts, "изменены метки")
 	}
 	if len(parts) == 0 {
 		return "правка без изменений"

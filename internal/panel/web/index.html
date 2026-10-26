@@ -1181,6 +1181,9 @@
             <p class="page-sub">{{ pageSub }}</p>
           </div>
           <div class="page-actions">
+            <sc-if value="{{ hasCta3 }}">
+              <div class="btn btn-secondary" data-focus="page-action-3" onClick="{{ doCta3 }}">{{ pageCta3 }}</div>
+            </sc-if>
             <sc-if value="{{ hasCta2 }}">
               <div class="btn btn-secondary" data-focus="page-action-2" onClick="{{ doCta2 }}">{{ pageCta2 }}</div>
             </sc-if>
@@ -2987,6 +2990,7 @@ function userSheet(user) {
   const plan = state.plans.find((p) => p.id === user.plan_id);
   if (plan) facts.splice(1, 0, el("div", { cls: "note", text: d.plan.of + ": " + plan.name }));
   if (user.note) facts.splice(1, 0, el("div", { cls: "note", text: d.user.noteIs + user.note }));
+  if ((user.tags || []).length) facts.splice(1, 0, el("div", { cls: "note", text: d.user.tagsIs + user.tags.map((x) => "#" + x).join(" ") }));
 
   // Обнулить расход — подарить трафик или исправить ошибку, не трогая срок.
   // Только если лимит есть: без лимита обнулять нечего, кнопка была бы пустой.
@@ -3106,6 +3110,8 @@ function editUserSheet(user) {
     if (label !== (user.label || "")) body.label = label;
     const note = val("eu-note");
     if (note !== (user.note || "")) body.note = note;
+    const tags = val("eu-tags").split(",").map((x) => x.trim().replace(/^#/, "")).filter(Boolean);
+    if (tags.join(",") !== (user.tags || []).join(",")) body.tags = tags;
     if (forever.checked) {
       if (until) body.no_expiry = true;
     } else {
@@ -3129,6 +3135,7 @@ function editUserSheet(user) {
   sheet(d.user.editTitle(name), [
     field(d.user.newLabel[0], "eu-label", "text", user.label || ""),
     field(d.user.noteField[0], "eu-note", "text", user.note || "", d.user.noteField[1]),
+    field(d.user.tagsField[0], "eu-tags", "text", (user.tags || []).join(", "), d.user.tagsField[1]),
     el("fieldset", { cls: "kinds" }, el("label", {}, forever, el("span", { text: d.user.editForever }))),
     dateBox,
     field(d.user.newGB[0], "eu-gb", "number", gb, d.user.newGB[1]),
@@ -3586,6 +3593,21 @@ function keySheet(key) {
 // Ручка требует админский токен в заголовке, а обычная ссылка его не несёт:
 // нажатие на <a href="/api/v1/backup"> получило бы 401. Поэтому качаем сами и
 // отдаём файл уже из памяти.
+// exportClients — таблица клиентов для своей бухгалтерии. Как и копия базы,
+// качается сама: ручке нужен админский токен в заголовке.
+function exportClients() {
+  act(async () => {
+    const res = await fetch("/api/v1/users/export.csv", { headers: { Authorization: "Bearer " + state.token } });
+    if (!res.ok) throw new Error(L().backup.failed(res.status));
+    const url = URL.createObjectURL(await res.blob());
+    const a = el("a", { href: url, download: "marvia-clients-" + new Date().toISOString().slice(0, 10) + ".csv" });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  });
+}
+
 function downloadBackup() {
   act(async () => {
     toast(L().backup.taking);
@@ -3957,7 +3979,7 @@ const TEXTS = {
       stats: (traffic) => "Трафик за 30 дней · " + traffic,
     },
 
-    cta: { dash: "+ Выдать доступ", clients: "+ Клиент", nodes: "+ Нода", keys: "+ Ключ", plans: "Тарифы", guard: "Защита" },
+    cta: { dash: "+ Выдать доступ", clients: "+ Клиент", nodes: "+ Нода", keys: "+ Ключ", plans: "Тарифы", guard: "Защита", export: "Выгрузить CSV" },
     guard: {
       title: "Защита нод от флуда",
       day: "Отбито соединений за сутки:",
@@ -4234,7 +4256,7 @@ const TEXTS = {
       links: "Ссылки", disable: "Отключить", enable: "Включить",
       rotate: "Сменить адрес подписки", remove: "Удалить", removed: "Удалён",
       edit: "Изменить", editTitle: (name) => "Изменить: " + name, editSaved: "Сохранено",
-      more: "Ещё…", noteIs: "Заметка: ", noteField: ["Заметка", "Видна только в панели, боту не отдаётся"],
+      more: "Ещё…", noteIs: "Заметка: ", tagsIs: "Метки: ", tagsField: ["Метки", "Через запятую: опт, семья"], noteField: ["Заметка", "Видна только в панели, боту не отдаётся"],
       frozenSince: "заморожен с ", freeze: "Заморозить", frozen: "Заморожен", unfreeze: "Разморозить", unfrozen: "Разморожен",
       freezeNote: "Пауза: доступ выключен, а срок при разморозке сдвинется на время паузы",
       resetDevices: "Сбросить устройства", devicesReset: "Устройства сброшены",
@@ -4474,7 +4496,7 @@ const TEXTS = {
       stats: (traffic) => "Traffic over 30 days · " + traffic,
     },
 
-    cta: { dash: "+ Give access", clients: "+ Client", nodes: "+ Node", keys: "+ Key", plans: "Plans", guard: "Protection" },
+    cta: { dash: "+ Give access", clients: "+ Client", nodes: "+ Node", keys: "+ Key", plans: "Plans", guard: "Protection", export: "Export CSV" },
     guard: {
       title: "Node flood protection",
       day: "Connections rejected in the last day:",
@@ -4751,7 +4773,7 @@ const TEXTS = {
       links: "Links", disable: "Disable", enable: "Enable",
       rotate: "Rotate subscription address", remove: "Delete", removed: "Deleted",
       edit: "Edit", editTitle: (name) => "Edit: " + name, editSaved: "Saved",
-      more: "More…", noteIs: "Note: ", noteField: ["Note", "Seen only in the panel, never given to the bot"],
+      more: "More…", noteIs: "Note: ", tagsIs: "Tags: ", tagsField: ["Tags", "Comma-separated: wholesale, family"], noteField: ["Note", "Seen only in the panel, never given to the bot"],
       frozenSince: "frozen since ", freeze: "Freeze", frozen: "Frozen", unfreeze: "Unfreeze", unfrozen: "Unfrozen",
       freezeNote: "A pause: access is off, and the term moves by the pause on unfreeze",
       resetDevices: "Reset devices", devicesReset: "Devices reset",
@@ -5320,7 +5342,7 @@ function renderVals() {
   // основание врать про то, сколько у продавца покупателей.
   const q = state.q.trim().toLowerCase();
   const found = q
-    ? users.filter((u) => ((u.label || "") + " " + (u.external_id || "") + " #" + u.id).toLowerCase().includes(q))
+    ? users.filter((u) => ((u.label || "") + " " + (u.external_id || "") + " #" + u.id + " " + (u.tags || []).join(" ") + " " + (u.note || "")).toLowerCase().includes(q))
     : users;
 
   // Готовые фильтры — те вопросы, ради которых продавец открывает список:
@@ -5333,6 +5355,9 @@ function renderVals() {
     ["idle", (u) => u.enabled && !u.online && (!u.last_seen || new Date(u.last_seen).getTime() < weekAgo)],
     ["off", (u) => !u.enabled],
     ...(state.plans || []).map((p) => ["plan:" + p.id, (u) => u.plan_id === p.id, p.name]),
+    // Метки — те, что есть хоть у кого-то: пустой фильтр только мешал бы.
+    ...[...new Set(users.flatMap((u) => u.tags || []))].sort().map((tag) =>
+      ["tag:" + tag, (u) => (u.tags || []).includes(tag), "#" + tag]),
   ];
   const active = FILTERS.find(([k]) => k === state.filter) || FILTERS[0];
   const shown = found.filter(active[1]);
@@ -6012,6 +6037,9 @@ function renderVals() {
     hasCta2: (page === "clients" || page === "nodes") && state.admin,
     pageCta2: page === "nodes" ? d18.cta.guard : d18.cta.plans,
     doCta2: () => (page === "nodes" ? guardSheet() : plansSheet()),
+    hasCta3: page === "clients" && state.admin,
+    pageCta3: d18.cta.export,
+    doCta3: () => exportClients(),
 
     hasError: !!state.error,
     errText: state.error || "",

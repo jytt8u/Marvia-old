@@ -1857,6 +1857,7 @@
               <div class="actions">
                 <button type="button" class="btn btn-primary" onClick="{{ saveWebhooks }}">{{ d18.wh.save }}</button>
                 <button type="button" class="btn btn-secondary" onClick="{{ newWebhookSecret }}">{{ d18.wh.generate }}</button>
+                <button type="button" class="btn btn-secondary" onClick="{{ openBotTexts }}">{{ d18.texts.open }}</button>
               </div>
               <div class="help card-foot">{{ webhookStatus }}</div>
             </div>
@@ -3682,6 +3683,60 @@ function keySheet(key) {
 // отдаём файл уже из памяти.
 // exportClients — таблица клиентов для своей бухгалтерии. Как и копия базы,
 // качается сама: ручке нужен админский токен в заголовке.
+// reportSheet — месяц числами: новые, продления, промокоды, кто ушёл, и
+// расход по нодам. Месяцы — последние двенадцать, текущий первым.
+function reportSheet(month) {
+  act(async () => {
+    const d = L();
+    const res = await api("/api/v1/report" + (month ? "?month=" + month : ""));
+    const r = res.report;
+    const pick = el("select", { id: "rp-month" });
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const m = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = m.getFullYear() + "-" + String(m.getMonth() + 1).padStart(2, "0");
+      const option = el("option", { value: key, text: m.toLocaleDateString(d.lang, { month: "long", year: "numeric" }) });
+      if (key === r.month) option.setAttribute("selected", "");
+      pick.append(option);
+    }
+    pick.addEventListener("change", () => reportSheet(pick.value));
+    const line = (label, value) => el("div", { cls: "line" }, el("div", { cls: "note", text: label }), el("b", { text: String(value) }));
+    const parts = [
+      el("label", { text: d.report.month }, pick),
+      line(d.report.new, r.new), line(d.report.renewals, r.renewals),
+      line(d.report.promos, r.promos), line(d.report.lapsed, r.lapsed),
+      el("div", { cls: "note", text: d.report.traffic }),
+      ...(r.traffic || []).map((n) => line(n.name || "#" + n.node_id, bytes(n.bytes))),
+    ];
+    sheet(d.report.title, parts, [btn(d.act.close, "", closeSheet)]);
+  });
+}
+
+// botTextsSheet — тексты покупателю к событиям вебхуков. Пустое поле — бот
+// пишет своё; заполненное приходит в событии полем text.
+function botTextsSheet() {
+  act(async () => {
+    const d = L();
+    const res = await api("/api/v1/bot-texts");
+    const parts = [el("div", { cls: "note", text: d.texts.intro })];
+    for (const ev of res.events || []) {
+      const area = el("textarea", { id: "bt-" + ev.replace(/\./g, "-"), cls: "input", rows: "3" });
+      area.value = (res.texts || {})[ev] || "";
+      parts.push(el("label", { text: d.texts.ev[ev] || ev }, area));
+    }
+    sheet(d.texts.title, parts, [
+      btn(d.plan.save, "go", () => act(async () => {
+        const body = {};
+        for (const ev of res.events || []) body[ev] = document.getElementById("bt-" + ev.replace(/\./g, "-")).value;
+        await api("/api/v1/bot-texts", "PUT", body);
+        toast(d.plan.saved);
+        closeSheet();
+      })),
+      btn(d.act.close, "", closeSheet),
+    ]);
+  });
+}
+
 function exportClients() {
   act(async () => {
     const res = await fetch("/api/v1/users/export.csv", { headers: { Authorization: "Bearer " + state.token } });
@@ -4066,7 +4121,20 @@ const TEXTS = {
       stats: (traffic) => "Трафик за 30 дней · " + traffic,
     },
 
-    cta: { dash: "+ Выдать доступ", clients: "+ Клиент", nodes: "+ Нода", keys: "+ Ключ", plans: "Тарифы", guard: "Защита", export: "Выгрузить CSV" },
+    cta: { dash: "+ Выдать доступ", clients: "+ Клиент", nodes: "+ Нода", keys: "+ Ключ", plans: "Тарифы", guard: "Защита", export: "Выгрузить CSV", report: "Отчёт за месяц" },
+    report: {
+      title: "Отчёт за месяц", month: "Месяц",
+      new: "Новых клиентов", renewals: "Продлений", promos: "Применено промокодов",
+      lapsed: "Кончился срок и не продлили", traffic: "Расход по нодам:",
+    },
+    texts: {
+      open: "Тексты для бота", title: "Тексты для бота",
+      intro: "Панель подставит {name}, {date}, {days}, {left}, {used} и пришлёт текст в событии полем text. Пусто — бот пишет своё.",
+      ev: {
+        "user.create": "Новый клиент", "user.renew": "Продление", "user.expired": "Срок кончился",
+        "user.traffic_low": "Трафик на исходе", "user.traffic_exhausted": "Трафик кончился",
+      },
+    },
     sales: {
       promos: "Промокоды", referral: "Рефералы",
       promosIntro: "Код даёт дни и гигабайты — один раз на человека.",
@@ -4239,7 +4307,7 @@ const TEXTS = {
         "plan.create": "новый тариф", "plan.update": "правка тарифа", "plan.delete": "тариф удалён",
         "panel.upgrade": "обновление панели",
         "nodes.upgrade": "обновление нод",
-        "autoupdate.update": "автообновление", "guard.update": "защита нод", "user.freeze": "заморозка", "user.unfreeze": "разморозка", "user.devices": "сброс устройств", "promo.create": "заведён промокод", "promo.delete": "удалён промокод", "user.promo": "применён промокод", "referral.update": "награда за приглашённых", "user.referral": "награда за приглашённого",
+        "autoupdate.update": "автообновление", "guard.update": "защита нод", "user.freeze": "заморозка", "user.unfreeze": "разморозка", "user.devices": "сброс устройств", "promo.create": "заведён промокод", "promo.delete": "удалён промокод", "user.promo": "применён промокод", "referral.update": "награда за приглашённых", "user.referral": "награда за приглашённого", "bot_texts.update": "тексты для бота", "users.export": "выгрузка клиентов",
       },
     },
     updates: {
@@ -4600,7 +4668,20 @@ const TEXTS = {
       stats: (traffic) => "Traffic over 30 days · " + traffic,
     },
 
-    cta: { dash: "+ Give access", clients: "+ Client", nodes: "+ Node", keys: "+ Key", plans: "Plans", guard: "Protection", export: "Export CSV" },
+    cta: { dash: "+ Give access", clients: "+ Client", nodes: "+ Node", keys: "+ Key", plans: "Plans", guard: "Protection", export: "Export CSV", report: "Monthly report" },
+    report: {
+      title: "Monthly report", month: "Month",
+      new: "New clients", renewals: "Renewals", promos: "Promo codes applied",
+      lapsed: "Expired and not renewed", traffic: "Traffic by node:",
+    },
+    texts: {
+      open: "Bot messages", title: "Bot messages",
+      intro: "The panel fills in {name}, {date}, {days}, {left}, {used} and sends the text in the event's text field. Empty — the bot writes its own.",
+      ev: {
+        "user.create": "New client", "user.renew": "Renewal", "user.expired": "Term ended",
+        "user.traffic_low": "Traffic running low", "user.traffic_exhausted": "Traffic used up",
+      },
+    },
     sales: {
       promos: "Promo codes", referral: "Referrals",
       promosIntro: "A code gives days and gigabytes — once per person.",
@@ -4773,7 +4854,7 @@ const TEXTS = {
         "plan.create": "new plan", "plan.update": "plan edited", "plan.delete": "plan deleted",
         "panel.upgrade": "panel upgrade",
         "nodes.upgrade": "nodes upgrade",
-        "autoupdate.update": "auto-update", "guard.update": "node protection", "user.freeze": "frozen", "user.unfreeze": "unfrozen", "user.devices": "devices reset", "promo.create": "promo code added", "promo.delete": "promo code deleted", "user.promo": "promo code applied", "referral.update": "referral reward", "user.referral": "referral bonus",
+        "autoupdate.update": "auto-update", "guard.update": "node protection", "user.freeze": "frozen", "user.unfreeze": "unfrozen", "user.devices": "devices reset", "promo.create": "promo code added", "promo.delete": "promo code deleted", "user.promo": "promo code applied", "referral.update": "referral reward", "user.referral": "referral bonus", "bot_texts.update": "bot messages", "users.export": "clients exported",
       },
     },
     updates: {
@@ -6155,9 +6236,9 @@ function renderVals() {
     doCta: CTA[page] || null,
     // Тарифы правит только админ: тариф решает, что получат за деньги все
     // следующие покупатели. Ключ бота их видит, но кнопки ему не нужно.
-    hasCta2: (page === "clients" || page === "nodes") && state.admin,
-    pageCta2: page === "nodes" ? d18.cta.guard : d18.cta.plans,
-    doCta2: () => (page === "nodes" ? guardSheet() : plansSheet()),
+    hasCta2: (page === "clients" || page === "nodes" || page === "stats") && state.admin,
+    pageCta2: page === "nodes" ? d18.cta.guard : page === "stats" ? d18.cta.report : d18.cta.plans,
+    doCta2: () => (page === "nodes" ? guardSheet() : page === "stats" ? reportSheet() : plansSheet()),
     hasCta3: page === "clients" && state.admin,
     pageCta3: d18.cta.export,
     doCta3: () => exportClients(),
@@ -6222,6 +6303,7 @@ function renderVals() {
         ? d18.bk.last + new Date(state.scheduledBackups.last_success).toLocaleString(state.lang === "en" ? "en-GB" : "ru-RU") : d18.bk.never),
     webhookStatus: state.webhooks
       ? (state.webhooks.enabled ? d18.wh.pending(state.webhooks.pending || 0) : d18.wh.off) : "",
+    openBotTexts: () => botTextsSheet(),
     saveWebhooks: () => act(async () => {
       await api("/api/v1/webhooks", "PUT", {
         enabled: document.getElementById("wh-on").checked,

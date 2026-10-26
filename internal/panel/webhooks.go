@@ -232,6 +232,10 @@ type WebhookEvent struct {
 	At    time.Time    `json:"at"`
 	User  *WebhookUser `json:"user,omitempty"`
 	Node  *WebhookNode `json:"node,omitempty"`
+
+	// Text — готовое сообщение покупателю из текстов продавца (report.go);
+	// нет текста к событию — поля нет, и бот пишет своё.
+	Text string `json:"text,omitempty"`
 }
 
 func webhookSignature(secret string, body []byte) string {
@@ -244,6 +248,13 @@ func enqueueWebhookTx(ctx context.Context, tx *sql.Tx, event WebhookEvent) error
 	cfg, err := readWebhookSettings(ctx, tx)
 	if err != nil || !cfg.Ready() {
 		return err
+	}
+	if event.User != nil {
+		texts, err := readBotTexts(ctx, tx)
+		if err != nil {
+			return err
+		}
+		event.Text = renderBotText(texts[event.Event], *event.User, event.At)
 	}
 	body, err := json.Marshal(event)
 	if err != nil {

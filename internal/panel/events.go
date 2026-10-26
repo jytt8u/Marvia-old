@@ -65,6 +65,7 @@ const (
 	EventUserPromo      = "user.promo"
 	EventReferralUpdate = "referral.update"
 	EventUserReferral   = "user.referral"
+	EventBotTexts       = "bot_texts.update"
 
 	// ActorBonus — от чьего имени пишется награда за приглашённого: её
 	// выдаёт не админ и не бот, а правило, которое продавец включил.

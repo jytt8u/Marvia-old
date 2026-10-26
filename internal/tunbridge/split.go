@@ -38,6 +38,7 @@ type splitDialer struct {
 	tunnel, local Dialer
 	direct        func(netip.Addr) bool
 	sites         *Sites
+	apps          AppRoute // правила по программам; см. apps.go
 }
 
 // siteRules отдаёт мосту правила: по ним он решает, ждать ли приветствия, и
@@ -69,6 +70,14 @@ func (d *splitDialer) DialDatagrams(ctx context.Context, target vp1.Address) (ne
 func (d *splitDialer) around(ctx context.Context, target vp1.Address) bool {
 	if target.Port == dnsPort {
 		return false
+	}
+	if src, ok := sourceOf(ctx); ok && d.apps != nil {
+		switch d.apps(src.port, src.udp) {
+		case RouteDirect:
+			return true
+		case RouteTunnel:
+			return false
+		}
 	}
 	ip, err := netip.ParseAddr(target.Host)
 	if err != nil {

@@ -252,6 +252,9 @@ type Controller struct {
 	// переподключение, и приложение пойдёт к адресу, не спрашивая заново.
 	sites *tunbridge.Sites
 
+	// apps — правила по программам (apps.go); как и сайты, на всю работу.
+	apps appRules
+
 	// dnsInUse — резолвер поднятого туннеля; пусто, пока туннеля нет.
 	dnsInUse string
 
@@ -315,6 +318,7 @@ func NewController(dns string, mtu uint32, log *journal) *Controller {
 		c.settings = loadSettings(dir)
 		c.lan.Store(c.settings.LANOutside)
 		c.sites.Set(c.settings.SitesDirect, c.settings.SitesTunnel)
+		c.apps.Set(c.settings.AppsDirect, c.settings.AppsTunnel)
 		if c.settings.BypassRussian {
 			c.applyRussian(dir)
 		}
@@ -863,7 +867,7 @@ func (c *Controller) raiseTunnel(ctx context.Context, dialer client.Backend, mea
 	bridge, err := tunbridge.Start(tunbridge.Config{
 		Endpoint: adapter.Endpoint(),
 		MTU:      mtu,
-		Dialer:   tunbridge.Split(tunnel, localNetwork, c.around, c.sites),
+		Dialer:   tunbridge.WithApps(tunbridge.Split(tunnel, localNetwork, c.around, c.sites), c.appRoute),
 		DNS:      dns,
 		Names:    names,
 		NoIPv6:   set.IPv6Off,

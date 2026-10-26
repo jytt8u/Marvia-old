@@ -367,7 +367,7 @@ func (h *handler) HandleTCP(conn adapter.TCPConn) {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(withSite(context.Background(), site), dialTimeout)
+	ctx, cancel := context.WithTimeout(withSource(withSite(context.Background(), site), conn.ID().RemotePort, false), dialTimeout)
 	stream, err := h.dialer.DialTarget(ctx, target)
 	cancel()
 	if v6 {
@@ -503,7 +503,7 @@ func (h *handler) serveUDP(conn adapter.UDPConn) {
 // Поток заведён на одну цель, поэтому адрес в датаграммах не нужен: куда
 // слать наружу, знает нода, а кому отдавать ответы — сказано в from.
 func (h *handler) pipeUDP(conn adapter.UDPConn, target vp1.Address, first []byte, from net.Addr) error {
-	ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
+	ctx, cancel := context.WithTimeout(withSource(context.Background(), conn.ID().RemotePort, true), dialTimeout)
 	stream, err := h.dialer.DialDatagrams(ctx, target)
 	cancel()
 	if err != nil {

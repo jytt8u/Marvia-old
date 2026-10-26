@@ -2267,6 +2267,27 @@
                   </div>
                 </div>
                 <!--
+                  Программы — по имени файла, как в диспетчере задач. Правило
+                  программы сильнее правил сайтов и российского списка
+                  (cmd/marvia-windows/apps.go, tunbridge/apps.go).
+                -->
+                <div class="stack">
+                  <div class="grow"><span class="name" data-t="appsTunnel"></span><span class="sub" data-t="appsHint"></span><span class="sub" id="apps-tunnel-msg"></span></div>
+                  <div class="pick" id="apps-tunnel-list" hidden></div>
+                  <div class="pick">
+                    <input type="text" class="code-in site-in" id="apps-tunnel-in" autocomplete="off" spellcheck="false" maxlength="1024">
+                    <button class="chip" id="apps-tunnel-add" type="button" data-t="sitesAdd"></button>
+                  </div>
+                </div>
+                <div class="stack">
+                  <div class="grow"><span class="name" data-t="appsDirect"></span><span class="sub" id="apps-direct-msg"></span></div>
+                  <div class="pick" id="apps-direct-list" hidden></div>
+                  <div class="pick">
+                    <input type="text" class="code-in site-in" id="apps-direct-in" autocomplete="off" spellcheck="false" maxlength="1024">
+                    <button class="chip" id="apps-direct-add" type="button" data-t="sitesAdd"></button>
+                  </div>
+                </div>
+                <!--
                   Kill switch — фильтр Windows (WFP) поверх туннеля: пока туннель
                   включён, мимо него не идёт ничего. Стоит рядом с домашней
                   сетью: она — единственное, что он пропускает по выбору.
@@ -2556,6 +2577,10 @@ const T = {
     killSwitchFailed: (e) => "Не встал, туннель работает без него: " + e,
     lanOutside: "Домашняя сеть мимо туннеля",
     lanOutsideHint: "Принтер, сетевой диск или камера — частные адреса 10.x, 172.16–31.x и 192.168.x идут напрямую. Свою подсеть Windows и так ведёт мимо туннеля — это для соседних. В чужом Wi-Fi домашняя сеть чужая: включай осознанно.",
+    appsTunnel: "Программы всегда через VPN",
+    appsDirect: "Программы всегда мимо VPN",
+    appsHint: "Имя файла, как в диспетчере задач: telegram.exe. Сильнее правил сайтов. Действует на новые соединения сразу.",
+    appsPlaceholder: "telegram.exe",
     sitesDirect: "Свои сайты мимо туннеля",
     sitesDirectHint: "Имя действует вместе с поддоменами: sberbank.ru уводит и online.sberbank.ru. Можно вписать несколько через пробел. Действует сразу, без переподключения. Сайт, который прячет своё имя (ECH), правило не узнает — он пойдёт через туннель.",
     sitesTunnel: "Свои сайты всегда через туннель",
@@ -2884,6 +2909,10 @@ const T = {
     killSwitchFailed: (e) => "Did not start, the tunnel runs without it: " + e,
     lanOutside: "Home network around the tunnel",
     lanOutsideHint: "Printer, network drive or camera — private addresses 10.x, 172.16–31.x and 192.168.x go directly. Windows already keeps your own subnet outside the tunnel — this is for the neighbouring ones. On someone else's Wi-Fi the home network is theirs: turn it on deliberately.",
+    appsTunnel: "Programs always through the VPN",
+    appsDirect: "Programs always around the VPN",
+    appsHint: "The file name, as in Task Manager: telegram.exe. Stronger than site rules. Applies to new connections at once.",
+    appsPlaceholder: "telegram.exe",
     sitesDirect: "Your sites around the tunnel",
     sitesDirectHint: "A name covers its subdomains: sberbank.ru also takes online.sberbank.ru. Several at once, separated by spaces. Applies at once, no reconnect. A site that hides its name (ECH) is not recognised — it goes through the tunnel.",
     sitesTunnel: "Your sites always through the tunnel",
@@ -4807,6 +4836,8 @@ function paintConn() {
   lan.setAttribute("aria-pressed", String(!!conn.lan_outside));
   paintSites("direct");
   paintSites("tunnel");
+  paintApps("direct");
+  paintApps("tunnel");
 
   // Под kill switch — стоит ли он сейчас на самом деле: включённый тумблер
   // без фильтра хуже выключенного, человек думает, что защищён.
@@ -5002,6 +5033,37 @@ function sendSites(button, kind, list) {
   return kind === "direct"
     ? changeConn(button, { sites_direct: list }, msg)
     : changeConn(button, { sites_tunnel: list }, msg);
+}
+// Программы — так же, как сайты: список из ответа программы, правка целиком.
+function paintApps(kind) {
+  const d = L(), list = (conn && conn["apps_" + kind]) || [];
+  const box = $("apps-" + kind + "-list");
+  box.hidden = list.length === 0;
+  box.replaceChildren(...list.map((name) => {
+    const b = el("button", "chip", name + " ×");
+    b.type = "button";
+    b.setAttribute("aria-label", d.sitesRemove(name));
+    b.addEventListener("click", () => sendApps(b, kind, list.filter((n) => n !== name)));
+    return b;
+  }));
+  $("apps-" + kind + "-in").placeholder = d.appsPlaceholder;
+  $("apps-" + kind + "-msg").textContent = "";
+}
+function sendApps(button, kind, list) {
+  const msg = "apps-" + kind + "-msg";
+  return kind === "direct"
+    ? changeConn(button, { apps_direct: list }, msg)
+    : changeConn(button, { apps_tunnel: list }, msg);
+}
+for (const kind of ["direct", "tunnel"]) {
+  const input = $("apps-" + kind + "-in"), add = $("apps-" + kind + "-add"), msg = "apps-" + kind + "-msg";
+  add.addEventListener("click", async () => {
+    const fresh = input.value.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+    if (!fresh.length) return;
+    $(msg).textContent = "";
+    if (await sendApps(add, kind, (conn["apps_" + kind] || []).concat(fresh))) input.value = "";
+  });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") add.click(); });
 }
 for (const kind of ["direct", "tunnel"]) {
   const input =$("sites-" + kind + "-in"), add = $("sites-" + kind + "-add"), msg = "sites-" + kind + "-msg";

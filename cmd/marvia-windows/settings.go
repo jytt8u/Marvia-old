@@ -101,6 +101,11 @@ type pcSettings struct {
 	// переключатель.
 	SitesDirect []string `json:"sites_direct,omitempty"`
 	SitesTunnel []string `json:"sites_tunnel,omitempty"`
+
+	// AppsDirect и AppsTunnel — программы по имени файла: всегда мимо и
+	// всегда через туннель (apps.go). Сильнее правил по сайтам.
+	AppsDirect []string `json:"apps_direct,omitempty"`
+	AppsTunnel []string `json:"apps_tunnel,omitempty"`
 }
 
 // placeSites ставит списки сайтов из правки окна.
@@ -192,6 +197,8 @@ type SettingsView struct {
 	// окну проще рисовать пустой список, чем проверять его наличие.
 	SitesDirect []string `json:"sites_direct"`
 	SitesTunnel []string `json:"sites_tunnel"`
+	AppsDirect  []string `json:"apps_direct"`
+	AppsTunnel  []string `json:"apps_tunnel"`
 
 	// DNS — выбранный резолвер; DNSInUse — тот, с которым поднят туннель.
 	// Разные — значит выбор применится при следующем подключении: адрес
@@ -261,6 +268,8 @@ type SettingsPatch struct {
 	// программа помнит между запросами.
 	SitesDirect *[]string `json:"sites_direct"`
 	SitesTunnel *[]string `json:"sites_tunnel"`
+	AppsDirect  *[]string `json:"apps_direct"`
+	AppsTunnel  *[]string `json:"apps_tunnel"`
 }
 
 // settingsFile — где лежат настройки подключения.

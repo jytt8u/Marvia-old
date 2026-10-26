@@ -138,6 +138,8 @@ func (c *Controller) Settings() SettingsView {
 		LANOutside:       c.settings.LANOutside,
 		SitesDirect:      displaySites(c.settings.SitesDirect),
 		SitesTunnel:      displaySites(c.settings.SitesTunnel),
+		AppsDirect:       append([]string{}, c.settings.AppsDirect...),
+		AppsTunnel:       append([]string{}, c.settings.AppsTunnel...),
 		DNS:              dnsHost(c.settings.resolver(c.dns)),
 		DNSInUse:         c.dnsInUse,
 		DNSSecure:        !c.settings.DNSPlain,
@@ -231,6 +233,10 @@ func (c *Controller) UpdateSettings(p SettingsPatch) (SettingsView, error) {
 		c.mu.Unlock()
 		return c.Settings(), errors.New(siteError(err))
 	}
+	if err := next.placeApps(p.AppsDirect, p.AppsTunnel); err != nil {
+		c.mu.Unlock()
+		return c.Settings(), errors.New(say(err.Error()))
+	}
 	account := c.account
 	c.mu.Unlock()
 
@@ -243,6 +249,7 @@ func (c *Controller) UpdateSettings(p SettingsPatch) (SettingsView, error) {
 	c.lan.Store(next.LANOutside)
 	// Правила по сайтам, как и обход, действуют на новые соединения сразу.
 	c.sites.Set(next.SitesDirect, next.SitesTunnel)
+	c.apps.Set(next.AppsDirect, next.AppsTunnel)
 
 	// Kill switch и домашняя сеть в его правилах действуют сразу: ждать
 	// переподключения ради запрета, который человек только что включил,

@@ -303,6 +303,15 @@ func (a *Alerts) BackupFailed(ctx context.Context, cause error) {
 	a.backupFailed(ctx, "backup-failed", "Копия базы не снялась: ", "Копия базы снова снимается.", cause)
 }
 
+// Say отправляет разовое сообщение продавцу, если оповещения настроены.
+func (a *Alerts) Say(ctx context.Context, text string) {
+	cfg, err := a.store.AlertSettings(ctx)
+	if err != nil || !cfg.Ready() {
+		return
+	}
+	a.say(ctx, cfg, text)
+}
+
 func (a *Alerts) RemoteBackupFailed(ctx context.Context, cause error) {
 	a.backupFailed(ctx, "remote-backup-failed", "Резервная копия не создана или не доставлена: ", "Резервная копия снова доставляется.", cause)
 }

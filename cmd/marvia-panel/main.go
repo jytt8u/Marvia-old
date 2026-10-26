@@ -274,6 +274,8 @@ func run(opts options) error {
 	go api.KeepTrafficReset(ctx)
 	// Очередь обновления нод — по одной; см. internal/panel/fleet.go.
 	go api.KeepRolling(ctx)
+	// Заблокированный порт — подписки на запасной; см. internal/panel/ports.go.
+	go api.KeepPortsOpen(ctx, func(text string) { alerts.Say(ctx, text) })
 
 	go func() {
 		<-ctx.Done()

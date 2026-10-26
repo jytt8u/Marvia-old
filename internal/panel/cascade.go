@@ -121,7 +121,7 @@ func (a *API) entrySync(w http.ResponseWriter, r *http.Request, n Node) {
 	// Выключенный выход — пустой адрес: вход перестаёт перекладывать, а не
 	// ведёт покупателей туда, откуда продавец их убрал.
 	if err == nil && exit.Enabled {
-		to = exit.Address
+		to = effectiveAddress(exit)
 	}
 	ok(w, map[string]any{"users": []any{}, "upgrade_to": n.UpgradeTo, "relay_to": to})
 }
@@ -179,5 +179,10 @@ func (s *Store) SubscriptionNodes(ctx context.Context, group string) ([]Node, er
 	// прочиталась — считаем основные здоровыми по ней, но молчание и
 	// выключение видно и без неё.
 	health, _ := s.NodeHealth(ctx)
+	// Покупателям — выбранный порт, а не основной (ports.go). До раскрытия
+	// входов: вход берёт адрес выхода отсюда же, но отдаёт свой.
+	for i := range nodes {
+		nodes[i].Address = effectiveAddress(nodes[i])
+	}
 	return forGroup(withStandby(viaEntries(nodes), health, time.Now()), group), nil
 }

@@ -949,6 +949,9 @@ func (a *API) nodeUsage(w http.ResponseWriter, r *http.Request, n Node) {
 
 		// Probe — у входа каскада: проверка своего выхода (fleet.go).
 		Probe *probeReport `json:"probe"`
+
+		// AltPorts — запасные порты ноды (ports.go); нода постарше их не шлёт.
+		AltPorts []int `json:"alt_ports"`
 	}
 	if !decodeFromNode(w, r, &body) {
 		return
@@ -968,6 +971,9 @@ func (a *API) nodeUsage(w http.ResponseWriter, r *http.Request, n Node) {
 		if _, err := a.store.RollNodeUpgrades(r.Context(), time.Now()); err != nil {
 			log.Printf("очередь обновления нод: %v", err)
 		}
+	}
+	if err := a.store.ReportAltPorts(r.Context(), n.ID, body.AltPorts); err != nil {
+		log.Printf("запасные порты ноды %d не сохранились: %v", n.ID, err)
 	}
 	if err := a.store.ReportProbe(r.Context(), n.ID, body.Probe, time.Now()); err != nil {
 		log.Printf("проверка выхода от ноды %d не сохранилась: %v", n.ID, err)
@@ -1088,6 +1094,9 @@ func (a *API) serveSubscription(w http.ResponseWriter, r *http.Request, user Use
 	if err != nil {
 		log.Printf("настройки связи с покупателем: %v", err)
 	}
+	// Сменился порт ноды — пусть люди в чужих приложениях обновят подписку
+	// (ports.go). Строкой к объявлению продавца, а не вместо него.
+	info.Announce = a.store.withPortNotice(r.Context(), info.Announce, time.Now())
 	// Имя профиля — метка доступа: её покупатель и так видит в имени каждой
 	// ноды (см. StockLinks), и в приложении профиль зовётся так же. Без метки
 	// Hiddify берёт последний сегмент адреса — токен подписки. Проверяем уже

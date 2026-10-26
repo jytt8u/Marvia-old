@@ -3609,6 +3609,16 @@ function nodeSheet(node) {
       }
       return el("label", { text: d.node.standbyFor }, pick);
     })(),
+    // Порт в подписке — только если нода слушает запасные (-alt-listen).
+    (node.alt_ports || []).length ? (() => {
+      const pick = el("select", { id: "nd-port" });
+      for (const p of [0, ...node.alt_ports]) {
+        const option = el("option", { value: String(p), text: p ? String(p) : d.node.portMain });
+        if (p === (node.active_port || 0)) option.setAttribute("selected", "");
+        pick.append(option);
+      }
+      return el("label", { text: d.node.port }, pick);
+    })() : null,
     field(d.node.maintFrom, "nd-mfrom", "datetime-local", localInput(node.maint_from)),
     field(d.node.maintUntil, "nd-muntil", "datetime-local", localInput(node.maint_until)),
   ];
@@ -3651,6 +3661,8 @@ function nodeSheet(node) {
       patch.limit_day = num("nd-limit-day") || 1;
       patch.groups = val("nd-groups").split(",").map((x) => x.trim()).filter(Boolean);
       patch.standby_for = Number(document.getElementById("nd-standby").value) || 0;
+      const port = document.getElementById("nd-port");
+      if (port) patch.active_port = Number(port.value) || 0;
       const mf = val("nd-mfrom"), mu = val("nd-muntil");
       // Пустой конец снимает окно; заполненный — ставит его с начала или
       // прямо сейчас, если начало не указано.
@@ -4463,7 +4475,7 @@ const TEXTS = {
         "plan.create": "новый тариф", "plan.update": "правка тарифа", "plan.delete": "тариф удалён",
         "panel.upgrade": "обновление панели",
         "nodes.upgrade": "обновление нод",
-        "autoupdate.update": "автообновление", "guard.update": "защита нод", "user.freeze": "заморозка", "user.unfreeze": "разморозка", "user.devices": "сброс устройств", "promo.create": "заведён промокод", "promo.delete": "удалён промокод", "user.promo": "применён промокод", "referral.update": "награда за приглашённых", "user.referral": "награда за приглашённого", "bot_texts.update": "тексты для бота", "panel.login": "вход в панель", "panel.restore": "восстановление из копии", "night_speed.update": "ночная скорость", "users.export": "выгрузка клиентов",
+        "autoupdate.update": "автообновление", "guard.update": "защита нод", "user.freeze": "заморозка", "user.unfreeze": "разморозка", "user.devices": "сброс устройств", "promo.create": "заведён промокод", "promo.delete": "удалён промокод", "user.promo": "применён промокод", "referral.update": "награда за приглашённых", "user.referral": "награда за приглашённого", "bot_texts.update": "тексты для бота", "panel.login": "вход в панель", "panel.restore": "восстановление из копии", "night_speed.update": "ночная скорость", "node.port": "смена порта ноды", "users.export": "выгрузка клиентов",
       },
     },
     updates: {
@@ -4699,6 +4711,7 @@ const TEXTS = {
       maintFrom: "Обслуживание с", maintUntil: "Обслуживание до (пусто — без окна)",
       maintEnd: "Закончить обслуживание", hoster: "У хостера за месяц",
       standbyFor: "Запасная для", standbyNone: "— обычная нода —",
+      port: "Порт в подписках (заблокируют — панель сменит сама)", portMain: "основной",
       probe: "До выхода из России", probeVia: (name) => "Из России через «" + name + "»",
       probeOK: (ms, ago) => "доходит, " + ms + " мс · " + ago, probeFail: (n, ago) => "не доходит " + n + " раз подряд · " + ago,
       load: "Нагрузка", loadText: (l, c) => l + " на " + c + " " + pluralRU(c, "ядро", "ядра", "ядер"), mem: (u, t) => "память " + u + " из " + t, maint: "Обслуживание", maintNow: "идёт: ", maintPlanned: "назначено: ",
@@ -5035,7 +5048,7 @@ const TEXTS = {
         "plan.create": "new plan", "plan.update": "plan edited", "plan.delete": "plan deleted",
         "panel.upgrade": "panel upgrade",
         "nodes.upgrade": "nodes upgrade",
-        "autoupdate.update": "auto-update", "guard.update": "node protection", "user.freeze": "frozen", "user.unfreeze": "unfrozen", "user.devices": "devices reset", "promo.create": "promo code added", "promo.delete": "promo code deleted", "user.promo": "promo code applied", "referral.update": "referral reward", "user.referral": "referral bonus", "bot_texts.update": "bot messages", "panel.login": "panel sign-in", "panel.restore": "restored from backup", "night_speed.update": "night speed", "users.export": "clients exported",
+        "autoupdate.update": "auto-update", "guard.update": "node protection", "user.freeze": "frozen", "user.unfreeze": "unfrozen", "user.devices": "devices reset", "promo.create": "promo code added", "promo.delete": "promo code deleted", "user.promo": "promo code applied", "referral.update": "referral reward", "user.referral": "referral bonus", "bot_texts.update": "bot messages", "panel.login": "panel sign-in", "panel.restore": "restored from backup", "night_speed.update": "night speed", "node.port": "node port switched", "users.export": "clients exported",
       },
     },
     updates: {
@@ -5271,6 +5284,7 @@ const TEXTS = {
       maintFrom: "Maintenance from", maintUntil: "Maintenance until (empty — none)",
       maintEnd: "End maintenance", hoster: "Hoster this month",
       standbyFor: "Standby for", standbyNone: "— a regular node —",
+      port: "Port in subscriptions (switched automatically if blocked)", portMain: "main",
       probe: "Reaching the exit from Russia", probeVia: (name) => "From Russia via “" + name + "”",
       probeOK: (ms, ago) => "reachable, " + ms + " ms · " + ago, probeFail: (n, ago) => "unreachable " + n + " times in a row · " + ago,
       load: "Load", loadText: (l, c) => l + " on " + c + (c === 1 ? " core" : " cores"), mem: (u, t) => "memory " + u + " of " + t, maint: "Maintenance", maintNow: "in progress: ", maintPlanned: "scheduled: ",

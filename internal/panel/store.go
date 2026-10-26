@@ -195,6 +195,11 @@ type Node struct {
 	// покупателей (fleet.go).
 	Probe *NodeProbe `json:"probe,omitempty"`
 
+	// AltPorts — запасные порты, которые нода слушает тоже; ActivePort —
+	// какой из них уходит покупателям, 0 — основной (ports.go).
+	AltPorts   []int `json:"alt_ports,omitempty"`
+	ActivePort int   `json:"active_port,omitempty"`
+
 	// Version и Arch — сборка ноды, как она сама сообщила в последнем
 	// отчёте. Пусто у нод старше этой возможности: они версию не шлют.
 	Version string `json:"version,omitempty"`
@@ -500,6 +505,10 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE nodes ADD COLUMN probe_ms INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE nodes ADD COLUMN probe_fails INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE nodes ADD COLUMN probe_at TEXT`,
+		// Запасные порты и переключение на них (ports.go).
+		`ALTER TABLE nodes ADD COLUMN alt_ports TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE nodes ADD COLUMN active_port INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE nodes ADD COLUMN port_switched TEXT`,
 		`CREATE TABLE IF NOT EXISTS node_guard (node_id INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE, hour TEXT NOT NULL, by_rate INTEGER NOT NULL DEFAULT 0, by_open INTEGER NOT NULL DEFAULT 0, by_block INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (node_id, hour))`,
 	}
 
@@ -1200,7 +1209,7 @@ func (s *Store) queryNodes(ctx context.Context, where string, args ...any) ([]No
 		`SELECT id, name, country, address, sni, sni_extra, public_key, reality_public_key, reality_short_id, ws_path, quic, enabled, last_seen, created_at, version, arch, upgrade_to, fingerprint, COALESCE(exit_id, 0),
 		        monthly_limit, limit_day, maint_from, maint_until, node_groups,
 		        sys_load, sys_cpus, sys_mem_total, sys_mem_avail, sys_at, COALESCE(standby_for, 0),
-		        probe_ok, probe_ms, probe_fails, probe_at
+		        probe_ok, probe_ms, probe_fails, probe_at, alt_ports, active_port
 		 FROM nodes `+where+` ORDER BY id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("чтение нод: %w", err)
@@ -1224,19 +1233,21 @@ func (s *Store) queryNodes(ctx context.Context, where string, args ...any) ([]No
 			probe     NodeProbe
 			probeOK   int
 			probeAt   sql.NullString
+			altPorts  string
 		)
 		if err := rows.Scan(&n.ID, &n.Name, &n.Country, &n.Address, &n.SNI, &sniExtra, &n.PublicKey,
 			&n.RealityPublicKey, &n.RealityShortID, &n.WSPath, &quicOn, &enabled, &lastSeen, &createdAt,
 			&n.Version, &n.Arch, &n.UpgradeTo, &n.Fingerprint, &n.ExitID,
 			&n.MonthlyLimit, &n.LimitDay, &mFrom, &mUntil, &groups,
 			&sys.Load, &sys.CPUs, &sys.MemTotal, &sys.MemAvail, &sysAt, &n.StandbyFor,
-			&probeOK, &probe.TCPMS, &probe.Fails, &probeAt); err != nil {
+			&probeOK, &probe.TCPMS, &probe.Fails, &probeAt, &altPorts, &n.ActivePort); err != nil {
 			return nil, err
 		}
 		if at := parseNullTime(probeAt); at != nil {
 			probe.OK, probe.At = probeOK != 0, *at
 			n.Probe = &probe
 		}
+		n.AltPorts = splitPorts(altPorts)
 		if at := parseNullTime(sysAt); at != nil {
 			sys.At = *at
 			n.Sys = &sys
@@ -1336,6 +1347,9 @@ type UpdateNodeParams struct {
 
 	// StandbyFor — чья это запасная; 0 — снова обычная нода.
 	StandbyFor *int64 `json:"standby_for,omitempty"`
+
+	// ActivePort — какой порт уходит покупателям; 0 — основной.
+	ActivePort *int `json:"active_port,omitempty"`
 }
 
 // UpdateNode меняет заданные поля ноды.
@@ -1427,6 +1441,17 @@ func (s *Store) UpdateNode(ctx context.Context, id int64, p UpdateNodeParams) (N
 			sets = append(sets, "maint_from = ?", "maint_until = ?")
 			args = append(args, format(p.Maintenance.From.UTC()), format(p.Maintenance.Until.UTC()))
 		}
+	}
+	if p.ActivePort != nil {
+		current, err := s.GetNode(ctx, id)
+		if err != nil {
+			return Node{}, err
+		}
+		if err := checkActivePort(current, *p.ActivePort); err != nil {
+			return Node{}, err
+		}
+		sets = append(sets, "active_port = ?")
+		args = append(args, *p.ActivePort)
 	}
 	if p.StandbyFor != nil {
 		if err := s.checkStandby(ctx, id, *p.StandbyFor); err != nil {

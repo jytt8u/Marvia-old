@@ -193,41 +193,101 @@ func transportDialer(node Node, serverName string, opts Options, onConnect func(
 	return tcpDialer(node, serverName, opts, onConnect)
 }
 
-// quicFirst пробует UDP, а потом навсегда переходит на TCP.
+// quicFirst выбирает между UDP и TCP тем, кто быстрее, а без UDP навсегда
+// остаётся на TCP.
+//
+// Первое соединение идёт наперегонки: QUIC и TCP набираются разом, кто
+// первым собрался, тот и путь, а проигравший закрывается. Раньше QUIC шёл
+// первым всегда, и там, где UDP медленнее TCP (перегруженный оператор, шейпер
+// на UDP), туннель годами ездил по худшей дороге только потому, что она
+// формально работала. Цена гонки — один лишний дозвон на старте.
 //
 // «Навсегда» важнее, чем кажется. UDP режут не по одному пакету, а целой
 // сетью: у оператора, в офисе, в белом списке. Там первая попытка не просто
 // не удастся — она будет молча висеть до тайм-аута, и так на каждом новом
 // соединении. Один раз выяснили, что дороги нет, и больше туда не ходим.
 func quicFirst(node Node, serverName string, opts Options, tcp func(context.Context) (net.Conn, error)) func(context.Context) (net.Conn, error) {
-	var udpDead atomic.Bool
+	const (
+		undecided int32 = iota
+		viaQUIC
+		viaTCP
+	)
+	var chosen atomic.Int32
 
-	return func(ctx context.Context) (net.Conn, error) {
-		if udpDead.Load() {
-			return tcp(ctx)
-		}
-
+	quic := func(ctx context.Context) (net.Conn, error) {
 		quicCtx, cancel := context.WithTimeout(ctx, quicAttempt)
 		defer cancel()
-
-		conn, err := transport.DialQUIC(quicCtx, node.Address, transport.QUICDialConfig{
+		return transport.DialQUIC(quicCtx, node.Address, transport.QUICDialConfig{
 			TLS: transport.ClientConfig{
 				ServerName:         serverName,
 				RootCAs:            opts.RootCAs,
 				InsecureSkipVerify: opts.InsecureSkipVerify,
 			},
 		})
-		if err == nil {
-			return conn, nil
-		}
-
-		// Отмена самим человеком — не приговор дороге: он просто нажал
-		// «отключиться», и в следующий раз UDP надо пробовать снова.
-		if ctx.Err() == nil {
-			udpDead.Store(true)
-		}
-		return tcp(ctx)
 	}
+
+	return func(ctx context.Context) (net.Conn, error) {
+		switch chosen.Load() {
+		case viaTCP:
+			return tcp(ctx)
+		case viaQUIC:
+			conn, err := quic(ctx)
+			if err == nil {
+				return conn, nil
+			}
+			// Отмена самим человеком — не приговор дороге: он просто нажал
+			// «отключиться», и в следующий раз UDP надо пробовать снова.
+			if ctx.Err() == nil {
+				chosen.Store(viaTCP)
+			}
+			return tcp(ctx)
+		}
+		return race(ctx, quic, tcp, func(viaUDP bool) {
+			if viaUDP {
+				chosen.Store(viaQUIC)
+			} else {
+				chosen.Store(viaTCP)
+			}
+		})
+	}
+}
+
+// race набирает QUIC и TCP разом и отдаёт первое собравшееся соединение;
+// второе, если соберётся, закрывается. won сообщает, кто выиграл. Не
+// собралось ни одно — ошибка TCP: она понятнее человеку, чем ошибка UDP.
+func race(ctx context.Context, quic, tcp func(context.Context) (net.Conn, error), won func(viaUDP bool)) (net.Conn, error) {
+	type result struct {
+		conn net.Conn
+		err  error
+		udp  bool
+	}
+	raceCtx, cancel := context.WithCancel(ctx)
+	results := make(chan result, 2)
+	go func() { c, err := quic(raceCtx); results <- result{c, err, true} }()
+	go func() { c, err := tcp(raceCtx); results <- result{c, err, false} }()
+
+	var tcpErr error
+	for i := 0; i < 2; i++ {
+		r := <-results
+		if r.err == nil {
+			won(r.udp)
+			cancel()
+			// Проигравший, если всё же соберётся, — лишний: закрываем.
+			if i == 0 {
+				go func() {
+					if late := <-results; late.conn != nil {
+						_ = late.conn.Close()
+					}
+				}()
+			}
+			return r.conn, nil
+		}
+		if !r.udp {
+			tcpErr = r.err
+		}
+	}
+	cancel()
+	return nil, tcpErr
 }
 
 // tcpDialer собирает дозвон по TCP — тот, что был до появления QUIC.

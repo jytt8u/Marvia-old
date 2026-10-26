@@ -70,6 +70,16 @@ type Client struct {
 
 	// probe — проверка выхода у входа каскада; см. probe.go.
 	probe probeState
+
+	// altPorts — запасные порты, на которых нода слушает тоже: панель
+	// переключит на них подписки, если основной заблокируют.
+	altPorts []int
+}
+
+// WithAltPorts задаёт запасные порты, о которых нода сообщает панели.
+func (c *Client) WithAltPorts(ports []int) *Client {
+	c.altPorts = ports
+	return c
 }
 
 // buildRetry — через сколько снова сообщать сборку панели, которая её не
@@ -226,6 +236,9 @@ func (c *Client) ReportUsage(ctx context.Context, report map[string]users.Usage,
 		if p := c.lastProbe(); p != nil {
 			body["probe"] = p
 		}
+		if len(c.altPorts) > 0 {
+			body["alt_ports"] = c.altPorts
+		}
 	}
 	err := c.postUsage(ctx, body)
 	var old *oldPanelError
@@ -237,6 +250,7 @@ func (c *Client) ReportUsage(ctx context.Context, report map[string]users.Usage,
 		delete(body, "guard")
 		delete(body, "sys")
 		delete(body, "probe")
+		delete(body, "alt_ports")
 		err = c.postUsage(ctx, body)
 	}
 	return err

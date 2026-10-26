@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -79,6 +80,7 @@ type deps struct {
 
 type serverOptions struct {
 	listenAddr      string
+	altListen       string
 	keyStr          string
 	keyFile         string
 	usersFile       string
@@ -110,6 +112,7 @@ func main() {
 	var opts serverOptions
 
 	flag.StringVar(&opts.listenAddr, "listen", ":8443", "адрес и порт для приёма соединений")
+	flag.StringVar(&opts.altListen, "alt-listen", "", "запасные порты через запятую, например 2053,8880: панель переключит на них подписки, если основной заблокируют")
 	flag.StringVar(&opts.keyStr, "key", "", "приватный ключ ноды в base64")
 	flag.StringVar(&opts.keyFile, "key-file", "", "файл с приватным ключом ноды")
 	flag.StringVar(&opts.usersFile, "users", "", "файл пользователей: JSON с лимитами либо просто список ключей (пусто — пускать всех)")
@@ -188,6 +191,28 @@ func run(opts serverOptions) error {
 	ln, err := listenTCP(opts.listenAddr)
 	if err != nil {
 		return fmt.Errorf("прослушивание %s: %w", opts.listenAddr, err)
+	}
+	// Запасные порты — тем же конвейером, что основной (multilisten.go).
+	altPorts, err := parseAltPorts(opts.altListen, opts.listenAddr)
+	if err != nil {
+		return err
+	}
+	var extra []net.Listener
+	host, _, _ := net.SplitHostPort(opts.listenAddr)
+	for _, port := range altPorts {
+		alt, err := listenTCP(net.JoinHostPort(host, strconv.Itoa(port)))
+		if err != nil {
+			for _, l := range extra {
+				_ = l.Close()
+			}
+			_ = ln.Close()
+			return fmt.Errorf("запасной порт %d: %w", port, err)
+		}
+		extra = append(extra, alt)
+	}
+	ln = listenMulti(ln, extra)
+	if panel != nil {
+		panel.WithAltPorts(altPorts)
 	}
 	defer ln.Close()
 

@@ -439,7 +439,7 @@ func (a *API) links(ctx context.Context, user User, issued []Issued) map[string]
 		return out
 	}
 
-	nodes, err := a.store.SubscriptionNodes(ctx)
+	nodes, err := a.store.SubscriptionNodes(ctx, user.NodeGroup)
 	if err != nil {
 		// Ссылки на ноды не собрались, но подписку отдать всё равно можно:
 		// клиент возьмёт список оттуда.
@@ -617,7 +617,7 @@ func (a *API) userLinks(w http.ResponseWriter, r *http.Request) {
 		respondStoreErr(w, err)
 		return
 	}
-	nodes, err := a.store.SubscriptionNodes(r.Context())
+	nodes, err := a.store.SubscriptionNodes(r.Context(), user.NodeGroup)
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err.Error())
 		return
@@ -856,6 +856,11 @@ func (a *API) updateNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	node, err := a.store.UpdateNode(r.Context(), id, p)
+	var bad inputError
+	if errors.As(err, &bad) {
+		fail(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
 		respondStoreErr(w, err)
 		return
@@ -1029,7 +1034,7 @@ func (a *API) serveSubscription(w http.ResponseWriter, r *http.Request, user Use
 		return
 	}
 
-	nodes, err := a.store.SubscriptionNodes(r.Context())
+	nodes, err := a.store.SubscriptionNodes(r.Context(), user.NodeGroup)
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err.Error())
 		return

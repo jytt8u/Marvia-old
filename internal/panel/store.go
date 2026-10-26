@@ -86,6 +86,10 @@ type User struct {
 	// Tags — метки продавца: «семья», «опт» (tags.go).
 	Tags []string `json:"tags,omitempty"`
 
+	// NodeGroup — какие ноды видит покупатель: пусто — только ноды для всех
+	// (nodeplan.go).
+	NodeGroup string `json:"node_group,omitempty"`
+
 	// ReferredBy — кто привёл; Referrals — скольких привёл он сам (sales.go).
 	ReferredBy *int64 `json:"referred_by,omitempty"`
 	Referrals  int    `json:"referrals,omitempty"`
@@ -163,6 +167,22 @@ type Node struct {
 	Enabled   bool       `json:"enabled"`
 	LastSeen  *time.Time `json:"last_seen,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
+
+	// MonthlyLimit и LimitDay — лимит трафика у хостера и число месяца, с
+	// которого он считается заново; MonthUsed — расход за текущий период.
+	// Ноль в лимите — лимита нет (nodeplan.go).
+	MonthlyLimit int64 `json:"monthly_limit,omitempty"`
+	LimitDay     int   `json:"limit_day,omitempty"`
+	MonthUsed    int64 `json:"month_used,omitempty"`
+
+	// MaintFrom и MaintUntil — окно обслуживания; Maintenance — идёт ли оно
+	// сейчас. Пока идёт, Enabled ложно для всех путей сразу (nodeplan.go).
+	MaintFrom   *time.Time `json:"maint_from,omitempty"`
+	MaintUntil  *time.Time `json:"maint_until,omitempty"`
+	Maintenance bool       `json:"maintenance,omitempty"`
+
+	// Groups — для кого нода: пусто — для всех (nodeplan.go).
+	Groups []string `json:"groups,omitempty"`
 
 	// Version и Arch — сборка ноды, как она сама сообщила в последнем
 	// отчёте. Пусто у нод старше этой возможности: они версию не шлют.
@@ -447,6 +467,14 @@ func migrate(db *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS trials (key TEXT NOT NULL PRIMARY KEY, at TEXT NOT NULL)`,
 		`ALTER TABLE plans ADD COLUMN trial INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE users ADD COLUMN referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL`,
+		// Лимит хостера, обслуживание и группы нод (nodeplan.go).
+		`ALTER TABLE nodes ADD COLUMN monthly_limit INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE nodes ADD COLUMN limit_day INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE nodes ADD COLUMN maint_from TEXT`,
+		`ALTER TABLE nodes ADD COLUMN maint_until TEXT`,
+		`ALTER TABLE nodes ADD COLUMN node_groups TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN node_group TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE plans ADD COLUMN node_group TEXT NOT NULL DEFAULT ''`,
 		`CREATE TABLE IF NOT EXISTS node_guard (node_id INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE, hour TEXT NOT NULL, by_rate INTEGER NOT NULL DEFAULT 0, by_open INTEGER NOT NULL DEFAULT 0, by_block INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (node_id, hour))`,
 	}
 
@@ -584,8 +612,9 @@ type CreateUserParams struct {
 	// Referrer — ключ продавца того, кто привёл покупателя (sales.go).
 	Referrer string `json:"referrer,omitempty"`
 
-	// trial подставляется из пробного тарифа в applyPlan.
-	trial bool
+	// trial и nodeGroup подставляются из тарифа в applyPlan.
+	trial     bool
+	nodeGroup string
 
 	// trafficReset подставляется из тарифа в applyPlan. Не из запроса: свой
 	// сброс без тарифа боту пока задать негде, и поле в JSON обещало бы то,
@@ -657,10 +686,10 @@ func (s *Store) CreateUser(ctx context.Context, p CreateUserParams) (User, []Iss
 	}
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO users (label, enabled, expires_at, traffic_limit, max_ips, max_conns, speed_limit, sub_token, created_at, external_id, plan_id, reset_anchor, reset_at, reset_kind, tags)
-		 VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO users (label, enabled, expires_at, traffic_limit, max_ips, max_conns, speed_limit, sub_token, created_at, external_id, plan_id, reset_anchor, reset_at, reset_kind, tags, node_group)
+		 VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.Label, nullTime(p.ExpiresAt.at()), p.TrafficLimit, p.MaxIPs, p.MaxConns, p.SpeedLimit, subToken, format(now),
-		nullString(p.ExternalID), p.PlanID, anchor, next, kind, joinTags(tags))
+		nullString(p.ExternalID), p.PlanID, anchor, next, kind, joinTags(tags), p.nodeGroup)
 	if err != nil {
 		return User{}, nil, fmt.Errorf("создание пользователя: %w", err)
 	}
@@ -744,6 +773,9 @@ type UpdateUserParams struct {
 
 	// Tags — метки целиком: пустой список снимает все.
 	Tags *[]string `json:"tags,omitempty"`
+
+	// NodeGroup — группа нод покупателя; пусто — только ноды для всех.
+	NodeGroup *string `json:"node_group,omitempty"`
 }
 
 // ErrExpiryConflict — в одном запросе и срок, и «бессрочно».
@@ -764,6 +796,10 @@ func (s *Store) UpdateUser(ctx context.Context, id int64, p UpdateUserParams) (U
 	}
 	if p.ExpiresAt != nil && p.NoExpiry {
 		return User{}, ErrExpiryConflict
+	}
+	if p.NodeGroup != nil {
+		sets = append(sets, "node_group = ?")
+		args = append(args, strings.TrimSpace(*p.NodeGroup))
 	}
 	if p.Tags != nil {
 		tags, err := cleanTags(*p.Tags)
@@ -979,7 +1015,7 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 		                 WHERE p.user_id = u.id AND n.last_seen >= ?), 0),
 		       COALESCE((SELECT SUM(p.ips) FROM presence p JOIN nodes n ON n.id = p.node_id
 		                 WHERE p.user_id = u.id AND n.last_seen >= ?), 0),
-		       u.last_seen, u.reset_at, u.reset_kind, u.frozen_at, u.note, u.tags, u.referred_by,
+		       u.last_seen, u.reset_at, u.reset_kind, u.frozen_at, u.note, u.tags, u.referred_by, u.node_group,
 		       (SELECT COUNT(*) FROM users r WHERE r.referred_by = u.id)
 		FROM users u ` + where
 
@@ -1012,7 +1048,7 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 		)
 		if err := rows.Scan(&u.ID, &u.Label, &enabled, &expires, &u.TrafficLimit,
 			&u.MaxIPs, &u.MaxConns, &u.SpeedLimit, &u.SubToken, &createdAt, &external, &u.Used, &plan,
-			&u.Online, &u.Devices, &seen, &resetAt, &u.TrafficReset, &frozenAt, &u.Note, &tags, &referred, &u.Referrals); err != nil {
+			&u.Online, &u.Devices, &seen, &resetAt, &u.TrafficReset, &frozenAt, &u.Note, &tags, &referred, &u.NodeGroup, &u.Referrals); err != nil {
 			return nil, err
 		}
 		u.Enabled = enabled != 0
@@ -1136,7 +1172,8 @@ func (s *Store) GetNode(ctx context.Context, id int64) (Node, error) {
 
 func (s *Store) queryNodes(ctx context.Context, where string, args ...any) ([]Node, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, country, address, sni, sni_extra, public_key, reality_public_key, reality_short_id, ws_path, quic, enabled, last_seen, created_at, version, arch, upgrade_to, fingerprint, COALESCE(exit_id, 0)
+		`SELECT id, name, country, address, sni, sni_extra, public_key, reality_public_key, reality_short_id, ws_path, quic, enabled, last_seen, created_at, version, arch, upgrade_to, fingerprint, COALESCE(exit_id, 0),
+		        monthly_limit, limit_day, maint_from, maint_until, node_groups
 		 FROM nodes `+where+` ORDER BY id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("чтение нод: %w", err)
@@ -1152,20 +1189,36 @@ func (s *Store) queryNodes(ctx context.Context, where string, args ...any) ([]No
 			enabled   int
 			lastSeen  sql.NullString
 			createdAt string
+			mFrom     sql.NullString
+			mUntil    sql.NullString
+			groups    string
 		)
 		if err := rows.Scan(&n.ID, &n.Name, &n.Country, &n.Address, &n.SNI, &sniExtra, &n.PublicKey,
 			&n.RealityPublicKey, &n.RealityShortID, &n.WSPath, &quicOn, &enabled, &lastSeen, &createdAt,
-			&n.Version, &n.Arch, &n.UpgradeTo, &n.Fingerprint, &n.ExitID); err != nil {
+			&n.Version, &n.Arch, &n.UpgradeTo, &n.Fingerprint, &n.ExitID,
+			&n.MonthlyLimit, &n.LimitDay, &mFrom, &mUntil, &groups); err != nil {
 			return nil, err
 		}
 		n.SNIExtra = splitNames(sniExtra)
-		n.Enabled = enabled != 0
+		n.MaintFrom, n.MaintUntil = parseNullTime(mFrom), parseNullTime(mUntil)
+		n.Maintenance = inMaintenance(n.MaintFrom, n.MaintUntil, time.Now())
+		n.Groups = splitTags(groups)
+		// Обслуживание гасит ноду для всех путей разом — подписок, ссылок,
+		// синхронизации, — а не только там, где про него вспомнили.
+		n.Enabled = enabled != 0 && !n.Maintenance
 		n.QUIC = quicOn != 0
 		n.LastSeen = parseNullTime(lastSeen)
 		n.CreatedAt = parse(createdAt)
 		list = append(list, n)
 	}
-	return list, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	if err := s.fillMonthUsed(ctx, list, time.Now()); err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 // splitNames разбирает имена прикрытия из строки через запятую.
@@ -1228,6 +1281,16 @@ type UpdateNodeParams struct {
 	// ExitID — новый выход входа каскада. Проверяет его API (checkExit):
 	// хранилищу не видно, вход ли это и годится ли выход.
 	ExitID *int64 `json:"exit_id,omitempty"`
+
+	// MonthlyLimit и LimitDay — лимит хостера и день его сброса (nodeplan.go).
+	MonthlyLimit *int64 `json:"monthly_limit,omitempty"`
+	LimitDay     *int   `json:"limit_day,omitempty"`
+
+	// Maintenance — окно обслуживания; нулевой конец снимает окно.
+	Maintenance *MaintWindow `json:"maintenance,omitempty"`
+
+	// Groups — для кого нода; пустой список — для всех.
+	Groups *[]string `json:"groups,omitempty"`
 }
 
 // UpdateNode меняет заданные поля ноды.
@@ -1243,7 +1306,7 @@ func (s *Store) UpdateNode(ctx context.Context, id int64, p UpdateNodeParams) (N
 	if p.Name != nil {
 		name := strings.TrimSpace(*p.Name)
 		if name == "" {
-			return Node{}, errors.New("имя ноды не может быть пустым")
+			return Node{}, badInput("имя ноды не может быть пустым")
 		}
 		sets = append(sets, "name = ?")
 		args = append(args, name)
@@ -1259,7 +1322,7 @@ func (s *Store) UpdateNode(ctx context.Context, id int64, p UpdateNodeParams) (N
 	if p.Fingerprint != nil {
 		fp, err := normalFingerprint(*p.Fingerprint)
 		if err != nil {
-			return Node{}, err
+			return Node{}, inputError{err}
 		}
 		sets = append(sets, "fingerprint = ?")
 		args = append(args, fp)
@@ -1286,7 +1349,7 @@ func (s *Store) UpdateNode(ctx context.Context, id int64, p UpdateNodeParams) (N
 		// Проверяем форму: бессмысленный адрес уедет в ссылки всех покупателей
 		// этой ноды, и узнают об этом они раньше продавца.
 		if _, _, err := net.SplitHostPort(address); err != nil {
-			return Node{}, fmt.Errorf("адрес ноды %q: нужен вид хост:порт", address)
+			return Node{}, badInputf("адрес ноды %q: нужен вид хост:порт", address)
 		}
 		sets = append(sets, "address = ?")
 		args = append(args, address)
@@ -1294,6 +1357,39 @@ func (s *Store) UpdateNode(ctx context.Context, id int64, p UpdateNodeParams) (N
 	if p.ExitID != nil {
 		sets = append(sets, "exit_id = ?")
 		args = append(args, *p.ExitID)
+	}
+	if p.MonthlyLimit != nil {
+		if *p.MonthlyLimit < 0 {
+			return Node{}, badInput("лимит хостера не бывает отрицательным")
+		}
+		sets = append(sets, "monthly_limit = ?")
+		args = append(args, *p.MonthlyLimit)
+	}
+	if p.LimitDay != nil {
+		if *p.LimitDay < 1 || *p.LimitDay > 28 {
+			return Node{}, badInput("день сброса лимита — от 1 до 28")
+		}
+		sets = append(sets, "limit_day = ?")
+		args = append(args, *p.LimitDay)
+	}
+	if p.Maintenance != nil {
+		if err := checkMaint(*p.Maintenance); err != nil {
+			return Node{}, inputError{err}
+		}
+		if p.Maintenance.Until.IsZero() {
+			sets = append(sets, "maint_from = NULL", "maint_until = NULL")
+		} else {
+			sets = append(sets, "maint_from = ?", "maint_until = ?")
+			args = append(args, format(p.Maintenance.From.UTC()), format(p.Maintenance.Until.UTC()))
+		}
+	}
+	if p.Groups != nil {
+		groups, err := cleanGroups(*p.Groups)
+		if err != nil {
+			return Node{}, inputError{err}
+		}
+		sets = append(sets, "node_groups = ?")
+		args = append(args, joinTags(groups))
 	}
 	if len(sets) == 0 {
 		return s.GetNode(ctx, id)
@@ -1330,13 +1426,16 @@ func (s *Store) AuthenticateNode(ctx context.Context, token string) (Node, error
 		enabled   int
 		lastSeen  sql.NullString
 		createdAt string
+		mFrom     sql.NullString
+		mUntil    sql.NullString
+		groups    string
 	)
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, name, country, address, sni, public_key, reality_public_key, reality_short_id, ws_path, quic, enabled, last_seen, created_at, version, arch, upgrade_to, COALESCE(exit_id, 0)
+		`SELECT id, name, country, address, sni, public_key, reality_public_key, reality_short_id, ws_path, quic, enabled, last_seen, created_at, version, arch, upgrade_to, COALESCE(exit_id, 0), maint_from, maint_until, node_groups
 		 FROM nodes WHERE token_hash = ?`, HashToken(token)).
 		Scan(&n.ID, &n.Name, &n.Country, &n.Address, &n.SNI, &n.PublicKey,
 			&n.RealityPublicKey, &n.RealityShortID, &n.WSPath, &quicOn, &enabled, &lastSeen, &createdAt,
-			&n.Version, &n.Arch, &n.UpgradeTo, &n.ExitID)
+			&n.Version, &n.Arch, &n.UpgradeTo, &n.ExitID, &mFrom, &mUntil, &groups)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Node{}, ErrNotFound
 	}
@@ -1344,7 +1443,10 @@ func (s *Store) AuthenticateNode(ctx context.Context, token string) (Node, error
 		return Node{}, err
 	}
 
-	n.Enabled = enabled != 0
+	n.MaintFrom, n.MaintUntil = parseNullTime(mFrom), parseNullTime(mUntil)
+	n.Maintenance = inMaintenance(n.MaintFrom, n.MaintUntil, time.Now())
+	n.Groups = splitTags(groups)
+	n.Enabled = enabled != 0 && !n.Maintenance
 	n.QUIC = quicOn != 0
 	n.LastSeen = parseNullTime(lastSeen)
 	n.CreatedAt = parse(createdAt)
@@ -1430,9 +1532,16 @@ func OlderVersion(a, b string) bool {
 // каждой ноде отдельно. Расход до переезда с чужой панели (used_before) — та
 // же «другая нода», только прошлая.
 func (s *Store) NodeUsers(ctx context.Context, nodeID int64) ([]users.User, error) {
+	// Нода с группами пускает только покупателей своих групп: иначе
+	// «премиум» держался бы только на том, что ссылку не раздали.
+	var groupsRaw string
+	if err := s.db.QueryRowContext(ctx, `SELECT node_groups FROM nodes WHERE id = ?`, nodeID).Scan(&groupsRaw); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	groups := splitTags(groupsRaw)
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT u.id, u.enabled, u.expires_at, u.traffic_limit, u.max_ips, u.max_conns, u.speed_limit,
-		       u.devices_from, c.kind, c.secret,
+		       u.devices_from, u.node_group, c.kind, c.secret,
 		       u.used_before + COALESCE((SELECT SUM(up + down) FROM usage WHERE user_id = u.id AND node_id <> ?), 0) - u.traffic_offset
 		FROM users u
 		JOIN credentials c ON c.user_id = u.id
@@ -1453,13 +1562,17 @@ func (s *Store) NodeUsers(ctx context.Context, nodeID int64) ([]users.User, erro
 			maxConns  int
 			speed     int64
 			devices   sql.NullString
+			group     string
 			kind      string
 			secret    string
 			elsewhere int64
 		)
 		if err := rows.Scan(&userID, &enabled, &expires, &limit, &maxIPs, &maxConns, &speed,
-			&devices, &kind, &secret, &elsewhere); err != nil {
+			&devices, &group, &kind, &secret, &elsewhere); err != nil {
 			return nil, err
+		}
+		if !groupAllows(groups, group) {
+			continue
 		}
 
 		// Имени покупателя здесь нет намеренно: ноде оно для пропуска не

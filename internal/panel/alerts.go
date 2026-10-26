@@ -210,6 +210,18 @@ func (a *Alerts) checkNodes(ctx context.Context, cfg AlertSettings) {
 			a.mark(slowKey, false)
 			a.say(ctx, cfg, "Нода «"+n.Name+"» снова тянет нормально.")
 		}
+
+		// Лимит хостера — один раз за период, когда израсходовано 90%:
+		// сверх лимита хостер режет скорость или выставляет счёт, и продавцу
+		// нужно время перевести людей на другие ноды.
+		if n.MonthlyLimit > 0 && n.MonthUsed*10 >= n.MonthlyLimit*9 {
+			quotaKey := fmt.Sprintf("node-quota-%d-%s", n.ID, limitPeriodStart(n.LimitDay, now).Format("2006-01-02"))
+			active[quotaKey] = struct{}{}
+			if !a.already(quotaKey) {
+				a.mark(quotaKey, true)
+				a.say(ctx, cfg, fmt.Sprintf("Нода «%s» израсходовала %d%% лимита хостера за месяц.", n.Name, n.MonthUsed*100/n.MonthlyLimit))
+			}
+		}
 	}
 	a.forgetMissingNodeAlerts(active)
 }
@@ -220,7 +232,7 @@ func (a *Alerts) forgetMissingNodeAlerts(active map[string]struct{}) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for key := range a.told {
-		if !strings.HasPrefix(key, "node-silent-") && !strings.HasPrefix(key, "node-slow-") {
+		if !strings.HasPrefix(key, "node-silent-") && !strings.HasPrefix(key, "node-slow-") && !strings.HasPrefix(key, "node-quota-") {
 			continue
 		}
 		if _, ok := active[key]; !ok {

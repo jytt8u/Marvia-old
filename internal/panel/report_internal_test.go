@@ -43,8 +43,11 @@ func TestBotGetsTheSellersTextFilledIn(t *testing.T) {
 	if err := d.Deliver(ctx, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
-	if last := string(bot.bodies[len(bot.bodies)-1]); strings.Contains(last, `"text"`) {
-		t.Fatalf("без текста продавца поле text всё равно пришло: %s", last)
+	// Очередь доставляет не по порядку создания — ищем Веру по имени.
+	for _, body := range bot.bodies {
+		if strings.Contains(string(body), `"label":"Вера"`) && strings.Contains(string(body), `"text"`) {
+			t.Fatalf("без текста продавца поле text всё равно пришло: %s", body)
+		}
 	}
 	if err := s.SetBotTexts(ctx, BotTexts{"user.typo": "x"}); err == nil {
 		t.Fatal("текст к несуществующему событию принят")

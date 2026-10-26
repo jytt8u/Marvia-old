@@ -904,7 +904,7 @@
   @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.985); } }
   #veil h2 { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
   #veil label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 500; color: var(--fg, #f1f4f7); }
-  #veil input[type=text], #veil input[type=number], #veil input[type=date], #veil select, #veil textarea {
+  #veil input[type=text], #veil input[type=number], #veil input[type=date], #veil input[type=datetime-local], #veil select, #veil textarea {
     min-height: 38px; padding: 8px 11px;
     border-radius: var(--r-ctl, 9px);
     border: 1px solid var(--line, #2a2f35);
@@ -2838,6 +2838,7 @@ function planSheet(plan) {
       note: val("pl-note"),
       traffic_reset: document.getElementById("pl-reset").value,
       trial: document.getElementById("pl-trial").checked,
+      node_group: val("pl-group"),
     };
     if (plan) await api("/api/v1/plans/" + plan.id, "PATCH", body);
     else await api("/api/v1/plans", "POST", body);
@@ -2870,6 +2871,7 @@ function planSheet(plan) {
     field(d.user.newGB[0], "pl-gb", "number", Math.round(p.traffic_limit / 1024 ** 3 * 10) / 10, d.user.newGB[1]),
     el("label", { text: d.plan.resetWhen }, reset),
     el("fieldset", { cls: "kinds" }, el("label", {}, trial, el("span", { text: d.sales.trialPlan }))),
+    field(d.node.planGroup[0], "pl-group", "text", p.node_group || "", d.node.planGroup[1]),
     field(d.user.newIPs[0], "pl-ips", "number", p.max_ips, d.user.newIPs[1]),
     field(d.user.newSpeed[0], "pl-speed", "number", Math.round(p.speed_limit / 125000), d.user.newSpeed[1]),
     field(d.plan.note[0], "pl-note", "text", p.note || "", d.plan.note[1]),
@@ -3200,6 +3202,8 @@ function editUserSheet(user) {
     if (note !== (user.note || "")) body.note = note;
     const tags = val("eu-tags").split(",").map((x) => x.trim().replace(/^#/, "")).filter(Boolean);
     if (tags.join(",") !== (user.tags || []).join(",")) body.tags = tags;
+    const group = val("eu-group");
+    if (group !== (user.node_group || "")) body.node_group = group;
     if (forever.checked) {
       if (until) body.no_expiry = true;
     } else {
@@ -3224,6 +3228,7 @@ function editUserSheet(user) {
     field(d.user.newLabel[0], "eu-label", "text", user.label || ""),
     field(d.user.noteField[0], "eu-note", "text", user.note || "", d.user.noteField[1]),
     field(d.user.tagsField[0], "eu-tags", "text", (user.tags || []).join(", "), d.user.tagsField[1]),
+    field(d.node.planGroup[0], "eu-group", "text", user.node_group || "", d.node.planGroup[1]),
     el("fieldset", { cls: "kinds" }, el("label", {}, forever, el("span", { text: d.user.editForever }))),
     dateBox,
     field(d.user.newGB[0], "eu-gb", "number", gb, d.user.newGB[1]),
@@ -3536,8 +3541,31 @@ function nodeSheet(node) {
     }
   }));
 
+  // Хостер, обслуживание и группы (nodeplan.go). Время — местное: продавец
+  // назначает работы по своим часам, а в панель уходит UTC.
+  const localInput = (iso) => {
+    if (!iso) return "";
+    const t = new Date(iso), p = (n) => String(n).padStart(2, "0");
+    return t.getFullYear() + "-" + p(t.getMonth() + 1) + "-" + p(t.getDate()) + "T" + p(t.getHours()) + ":" + p(t.getMinutes());
+  };
+  const plan = [
+    field(d.node.limitGB[0], "nd-limit", "number", node.monthly_limit ? Math.round(node.monthly_limit / 1024 ** 3) : "", d.node.limitGB[1]),
+    field(d.node.limitDay, "nd-limit-day", "number", node.limit_day || 1),
+    field(d.node.groups[0], "nd-groups", "text", (node.groups || []).join(", "), d.node.groups[1]),
+    field(d.node.maintFrom, "nd-mfrom", "datetime-local", localInput(node.maint_from)),
+    field(d.node.maintUntil, "nd-muntil", "datetime-local", localInput(node.maint_until)),
+  ];
+  if (node.monthly_limit) {
+    stateFacts.push([d.node.hoster, bytes(node.month_used || 0) + d.user.of + bytes(node.monthly_limit)]);
+  }
+  if (node.maint_until) {
+    stateFacts.push([d.node.maint, (node.maintenance ? d.node.maintNow : d.node.maintPlanned) + shortDate(node.maint_from) + " — " + new Date(node.maint_until).toLocaleString(d.lang)]);
+  }
+
   sheet(node.name || node.address, [
     ...form,
+    el("div", { cls: "sec", text: d.node.secPlan }),
+    ...plan,
     el("div", { cls: "sec", text: d.node.secProto }),
     facts(proto),
     entry
@@ -3550,6 +3578,15 @@ function nodeSheet(node) {
   ], [
     btn(d.node.save, "go", () => act(async () => {
       const patch = { name: name.value.trim() };
+      patch.monthly_limit = Math.round(num("nd-limit") * 1024 ** 3);
+      patch.limit_day = num("nd-limit-day") || 1;
+      patch.groups = val("nd-groups").split(",").map((x) => x.trim()).filter(Boolean);
+      const mf = val("nd-mfrom"), mu = val("nd-muntil");
+      // Пустой конец снимает окно; заполненный — ставит его с начала или
+      // прямо сейчас, если начало не указано.
+      patch.maintenance = mu
+        ? { from: (mf ? new Date(mf) : new Date()).toISOString(), until: new Date(mu).toISOString() }
+        : { until: "0001-01-01T00:00:00Z" };
       if (entry) {
         const to = Number(exitPick.value);
         if (to && to !== node.exit_id) patch.exit_id = to;
@@ -3565,7 +3602,13 @@ function nodeSheet(node) {
     // Вход в России ставится к обычной ноде не за CDN: за CDN адрес ноды и
     // так скрыт, а сырые байты от входа CDN не поймёт.
     entry || node.ws_path ? null : btn(d.node.addEntry, "", () => { closeSheet(); newNodeSheet(node); }),
-    btn(node.enabled ? d.node.disable : d.node.enable, "", () => act(async () => {
+    // На обслуживании «Включить» ничего бы не дало: ноду гасит окно, а не
+    // переключатель. Вместо него — закончить обслуживание сейчас.
+    node.maintenance ? btn(d.node.maintEnd, "", () => act(async () => {
+      await api("/api/v1/nodes/" + node.id, "PATCH", { maintenance: { until: "0001-01-01T00:00:00Z" } });
+      closeSheet();
+      await loadAll();
+    })) : btn(node.enabled ? d.node.disable : d.node.enable, "", () => act(async () => {
       await api("/api/v1/nodes/" + node.id, "PATCH", { enabled: !node.enabled });
       closeSheet();
       toast(node.enabled ? d.node.disabled : d.node.enabled);
@@ -4268,7 +4311,7 @@ const TEXTS = {
     nodesPage: {
       empty: "Ни одной ноды. Установщик раздаёт сама панель — заведи ноду и получишь команду.",
       online: "НА СВЯЗИ", silent: "МОЛЧИТ", off: "ВЫКЛЮЧЕНА",
-      silentShort: "молчит", offShort: "выкл",
+      silentShort: "молчит", offShort: "выкл", maintShort: "обслуживание", maintState: "Обслуживание",
       via: (exit) => "вход → " + exit,
       slow: "РЕЖУТ", kbps: (k) => "~" + k + " кбит/с",
     },
@@ -4535,6 +4578,13 @@ const TEXTS = {
       country: ["Страна", "Тоже видно покупателю; встаёт первой в названии"],
       sniExtra: "Запасные имена прикрытия",
       fp: ["Отпечаток TLS", "Чьё приветствие изображает клиент. Меняй, только если на ноду массово не подключаются, и не чаще раза в несколько минут"],
+      secPlan: "Хостер, обслуживание, группы",
+      limitGB: ["Лимит трафика у хостера, ГБ в месяц", "Пусто — без лимита; на 90% придёт оповещение"],
+      limitDay: "День месяца, с которого хостер считает заново",
+      groups: ["Группы", "Для кого нода, через запятую; пусто — для всех"],
+      planGroup: ["Группа нод", "Пусто — только ноды для всех"],
+      maintFrom: "Обслуживание с", maintUntil: "Обслуживание до (пусто — без окна)",
+      maintEnd: "Закончить обслуживание", hoster: "У хостера за месяц", maint: "Обслуживание", maintNow: "идёт: ", maintPlanned: "назначено: ",
       fpDefault: "chrome — по умолчанию",
       byIP: "По IP", countryAuto: "Пусто — панель узнает по IP сама",
       secProto: "Протокол", secState: "Состояние",
@@ -4815,7 +4865,7 @@ const TEXTS = {
     nodesPage: {
       empty: "No nodes yet. The panel serves the installer itself — add a node and you get the command.",
       online: "ONLINE", silent: "SILENT", off: "DISABLED",
-      silentShort: "silent", offShort: "off",
+      silentShort: "silent", offShort: "off", maintShort: "maintenance", maintState: "Maintenance",
       via: (exit) => "entry → " + exit,
       slow: "THROTTLED", kbps: (k) => "~" + k + " kbit/s",
     },
@@ -5082,6 +5132,13 @@ const TEXTS = {
       country: ["Country", "The buyer sees it too; it comes first in the name"],
       sniExtra: "Spare cover names",
       fp: ["TLS fingerprint", "Whose hello the client imitates. Change it only if buyers massively fail to connect, and not more often than every few minutes"],
+      secPlan: "Hoster, maintenance, groups",
+      limitGB: ["Hoster traffic limit, GB a month", "Empty — no limit; you get an alert at 90%"],
+      limitDay: "Day of month the hoster resets the count",
+      groups: ["Groups", "Who the node is for, comma-separated; empty — everyone"],
+      planGroup: ["Node group", "Empty — only nodes for everyone"],
+      maintFrom: "Maintenance from", maintUntil: "Maintenance until (empty — none)",
+      maintEnd: "End maintenance", hoster: "Hoster this month", maint: "Maintenance", maintNow: "in progress: ", maintPlanned: "scheduled: ",
       fpDefault: "chrome — default",
       byIP: "By IP", countryAuto: "Empty — the panel finds it by IP",
       secProto: "Protocol", secState: "State",
@@ -5925,9 +5982,9 @@ function renderVals() {
       share: total ? Math.round((traffic / total) * 100) + "%" : "0%",
       // «Режут» — нода на связи, но покупатели тянут с неё еле-еле (отчёты
       // приложений). «На связи» этого не видит, а продавцу это важнее всего.
-      seen: slow ? d18.nodesPage.kbps(n.fetch_kbps) : alive ? sinceLabel(n.last_seen) : n.enabled ? d18.nodesPage.silentShort : d18.nodesPage.offShort,
+      seen: n.maintenance ? d18.nodesPage.maintShort : slow ? d18.nodesPage.kbps(n.fetch_kbps) : alive ? sinceLabel(n.last_seen) : n.enabled ? d18.nodesPage.silentShort : d18.nodesPage.offShort,
       seenCls: "stat-value " + (slow ? "warn" : alive ? "ok" : n.enabled ? "warn" : ""),
-      state: slow ? d18.nodesPage.slow : alive ? d18.nodesPage.online : n.enabled ? d18.nodesPage.silent : d18.nodesPage.off,
+      state: n.maintenance ? d18.nodesPage.maintState : slow ? d18.nodesPage.slow : alive ? d18.nodesPage.online : n.enabled ? d18.nodesPage.silent : d18.nodesPage.off,
       cls: "card node-card rise lift" + (alive && !slow ? "" : " warn"),
       badgeCls: "pill " + (alive && !slow ? "ok" : n.enabled ? "warn" : ""),
       fillCls: alive ? "" : "warn",

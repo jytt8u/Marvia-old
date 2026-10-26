@@ -83,6 +83,9 @@ func viaEntries(nodes []Node) []Node {
 		v.QUIC = false
 		v.Enabled = n.Enabled && exit.Enabled
 		v.LastSeen = n.LastSeen
+		// Для кого вход — решают группы входа: его ставят ради конкретных
+		// покупателей, а выход может служить всем.
+		v.Groups = n.Groups
 		// Страна — выхода: покупатель выбирает, где окажется его адрес, а
 		// не через какой город туда ехать. Вход — в имени.
 		v.Name = entryTitle(exit.Name, n.Name)
@@ -164,10 +167,12 @@ func (s *Store) RelayIPs(ctx context.Context, exitID int64) ([]string, error) {
 
 // SubscriptionNodes — ноды в том виде, в каком они уходят покупателям:
 // входы раскрыты в копии своих выходов.
-func (s *Store) SubscriptionNodes(ctx context.Context) ([]Node, error) {
+//
+// group — группа нод покупателя: ноды других групп ему не уходят.
+func (s *Store) SubscriptionNodes(ctx context.Context, group string) ([]Node, error) {
 	nodes, err := s.ListNodes(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return viaEntries(nodes), nil
+	return forGroup(viaEntries(nodes), group), nil
 }

@@ -52,6 +52,9 @@ type Plan struct {
 	// Trial — пробный: один раз на человека по ключу продавца (sales.go).
 	Trial bool `json:"trial,omitempty"`
 
+	// NodeGroup — какие ноды видят купившие: пусто — ноды для всех.
+	NodeGroup string `json:"node_group,omitempty"`
+
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -65,6 +68,7 @@ type PlanParams struct {
 	Note         string `json:"note"`
 	TrafficReset string `json:"traffic_reset"`
 	Trial        bool   `json:"trial"`
+	NodeGroup    string `json:"node_group"`
 }
 
 func (p *PlanParams) check() error {
@@ -92,7 +96,7 @@ func (p *PlanParams) check() error {
 // ListPlans — все тарифы, от коротких к длинным: так их и выбирают.
 func (s *Store) ListPlans(ctx context.Context) ([]Plan, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, name, days, traffic_limit, max_ips, speed_limit, note, traffic_reset, trial, created_at
+		SELECT id, name, days, traffic_limit, max_ips, speed_limit, note, traffic_reset, trial, node_group, created_at
 		FROM plans ORDER BY CASE WHEN days = 0 THEN 1 ELSE 0 END, days, traffic_limit, id`)
 	if err != nil {
 		return nil, fmt.Errorf("чтение тарифов: %w", err)
@@ -116,7 +120,7 @@ func scanPlan(row rowScanner) (Plan, error) {
 		p       Plan
 		created string
 	)
-	if err := row.Scan(&p.ID, &p.Name, &p.Days, &p.TrafficLimit, &p.MaxIPs, &p.SpeedLimit, &p.Note, &p.TrafficReset, &p.Trial, &created); err != nil {
+	if err := row.Scan(&p.ID, &p.Name, &p.Days, &p.TrafficLimit, &p.MaxIPs, &p.SpeedLimit, &p.Note, &p.TrafficReset, &p.Trial, &p.NodeGroup, &created); err != nil {
 		return Plan{}, err
 	}
 	p.CreatedAt = parse(created)
@@ -134,7 +138,7 @@ type querier interface {
 
 func getPlan(ctx context.Context, q querier, id int64) (Plan, error) {
 	p, err := scanPlan(q.QueryRowContext(ctx, `
-		SELECT id, name, days, traffic_limit, max_ips, speed_limit, note, traffic_reset, trial, created_at
+		SELECT id, name, days, traffic_limit, max_ips, speed_limit, note, traffic_reset, trial, node_group, created_at
 		FROM plans WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Plan{}, ErrNoSuchPlan
@@ -148,9 +152,9 @@ func (s *Store) CreatePlan(ctx context.Context, p PlanParams) (Plan, error) {
 		return Plan{}, err
 	}
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO plans (name, days, traffic_limit, max_ips, speed_limit, note, traffic_reset, trial, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.Name, p.Days, p.TrafficLimit, p.MaxIPs, p.SpeedLimit, p.Note, p.TrafficReset, p.Trial, format(time.Now().UTC()))
+		INSERT INTO plans (name, days, traffic_limit, max_ips, speed_limit, note, traffic_reset, trial, node_group, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.Name, p.Days, p.TrafficLimit, p.MaxIPs, p.SpeedLimit, p.Note, p.TrafficReset, p.Trial, strings.TrimSpace(p.NodeGroup), format(time.Now().UTC()))
 	if err != nil {
 		return Plan{}, fmt.Errorf("создание тарифа: %w", err)
 	}
@@ -168,8 +172,8 @@ func (s *Store) UpdatePlan(ctx context.Context, id int64, p PlanParams) (Plan, e
 		return Plan{}, err
 	}
 	res, err := s.db.ExecContext(ctx, `
-		UPDATE plans SET name = ?, days = ?, traffic_limit = ?, max_ips = ?, speed_limit = ?, note = ?, traffic_reset = ?, trial = ?
-		WHERE id = ?`, p.Name, p.Days, p.TrafficLimit, p.MaxIPs, p.SpeedLimit, p.Note, p.TrafficReset, p.Trial, id)
+		UPDATE plans SET name = ?, days = ?, traffic_limit = ?, max_ips = ?, speed_limit = ?, note = ?, traffic_reset = ?, trial = ?, node_group = ?
+		WHERE id = ?`, p.Name, p.Days, p.TrafficLimit, p.MaxIPs, p.SpeedLimit, p.Note, p.TrafficReset, p.Trial, strings.TrimSpace(p.NodeGroup), id)
 	if err != nil {
 		return Plan{}, fmt.Errorf("правка тарифа: %w", err)
 	}
@@ -211,6 +215,7 @@ func (s *Store) applyPlan(ctx context.Context, p *CreateUserParams, now time.Tim
 	p.TrafficLimit, p.MaxIPs, p.SpeedLimit = plan.TrafficLimit, plan.MaxIPs, plan.SpeedLimit
 	p.trafficReset = plan.TrafficReset
 	p.trial = plan.Trial
+	p.nodeGroup = plan.NodeGroup
 	return nil
 }
 
@@ -269,9 +274,9 @@ func (s *Store) RenewUser(ctx context.Context, id, planID int64) (User, error) {
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE users SET expires_at = ?, traffic_limit = ?, max_ips = ?, speed_limit = ?, plan_id = ?,
-		       enabled = 1, traffic_offset = `+usedTotalSQL+`, reset_anchor = ?, reset_at = ?, reset_kind = ?
+		       enabled = 1, traffic_offset = `+usedTotalSQL+`, reset_anchor = ?, reset_at = ?, reset_kind = ?, node_group = ?
 		WHERE id = ?`,
-		expires, plan.TrafficLimit, plan.MaxIPs, plan.SpeedLimit, plan.ID, anchor, next, kind, id); err != nil {
+		expires, plan.TrafficLimit, plan.MaxIPs, plan.SpeedLimit, plan.ID, anchor, next, kind, plan.NodeGroup, id); err != nil {
 		return User{}, fmt.Errorf("продление по тарифу: %w", err)
 	}
 	if err := resetWebhookUserState(ctx, tx, id); err != nil {

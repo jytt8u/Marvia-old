@@ -231,6 +231,11 @@ func (s *Store) RenewUser(ctx context.Context, id, planID int64) (User, error) {
 	if err != nil {
 		return User{}, err
 	}
+	// Продление замороженного сначала размораживает: оплаченный период
+	// добавляется к сроку, уже сдвинутому на время паузы.
+	if _, err := unfreezeTx(ctx, tx, id, time.Now()); err != nil {
+		return User{}, err
+	}
 
 	var current sql.NullString
 	err = tx.QueryRowContext(ctx, `SELECT expires_at FROM users WHERE id = ?`, id).Scan(&current)

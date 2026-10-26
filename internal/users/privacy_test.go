@@ -140,3 +140,29 @@ func TestAddressesNeverLeaveTheNodeMemory(t *testing.T) {
 		}
 	}
 }
+
+// TestDeviceResetFreesTheLimitAtOnce — продавец нажал «Сбросить устройства»:
+// человек, сменивший телефон, подключается с нового адреса сразу, а не через
+// час, когда старый адрес забылся бы сам.
+func TestDeviceResetFreesTheLimitAtOnce(t *testing.T) {
+	raw, encoded := newKey(t)
+	r, err := NewRegistry([]User{{Secret: encoded, Enabled: true, MaxIPs: 1, Account: "7"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := r.Admit(KindVP1, raw, addr(buyerIP))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if _, err := r.Admit(KindVP1, raw, addr("198.51.100.99:5000")); err == nil {
+		t.Fatal("второй адрес пущен сверх лимита в одно устройство")
+	}
+
+	if err := r.Replace([]User{{Secret: encoded, Enabled: true, MaxIPs: 1, Account: "7", DevicesFrom: time.Now().Add(time.Second)}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Admit(KindVP1, raw, addr("198.51.100.99:5000")); err != nil {
+		t.Fatalf("после сброса устройств новый адрес не пущен: %v", err)
+	}
+}

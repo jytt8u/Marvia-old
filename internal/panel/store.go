@@ -77,6 +77,12 @@ type User struct {
 	TrafficReset   string     `json:"traffic_reset,omitempty"`
 	TrafficResetAt *time.Time `json:"traffic_reset_at,omitempty"`
 
+	// FrozenAt — когда доступ заморожен; nil — не заморожен (freeze.go).
+	FrozenAt *time.Time `json:"frozen_at,omitempty"`
+
+	// Note — заметка продавца; ботам не отдаётся (см. visible).
+	Note string `json:"note,omitempty"`
+
 	// Online, Devices, LastSeen — на связи ли он прямо сейчас. Заполняются при
 	// чтении из последнего отчёта каждой живой ноды: соединений всего,
 	// адресов за час (только у тех, кому задан лимит устройств — остальным
@@ -423,6 +429,10 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE users ADD COLUMN reset_kind TEXT NOT NULL DEFAULT ''`,
 		`UPDATE users SET reset_kind = 'month' WHERE reset_anchor IS NOT NULL AND reset_kind = ''`,
 		// Сколько соединений нода отклонила за час — только числа (guard.go).
+		// Заморозка, сброс устройств и заметка продавца (freeze.go).
+		`ALTER TABLE users ADD COLUMN frozen_at TEXT`,
+		`ALTER TABLE users ADD COLUMN devices_from TEXT`,
+		`ALTER TABLE users ADD COLUMN note TEXT NOT NULL DEFAULT ''`,
 		`CREATE TABLE IF NOT EXISTS node_guard (node_id INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE, hour TEXT NOT NULL, by_rate INTEGER NOT NULL DEFAULT 0, by_open INTEGER NOT NULL DEFAULT 0, by_block INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (node_id, hour))`,
 	}
 
@@ -685,6 +695,9 @@ type UpdateUserParams struct {
 	// а не пустым expires_at: пустая строка в сроке — почти всегда ошибка
 	// бота, и молча раздать по ней вечный доступ было бы дорого.
 	NoExpiry bool `json:"no_expiry,omitempty"`
+
+	// Note — заметка продавца, не длиннее maxNote знаков.
+	Note *string `json:"note,omitempty"`
 }
 
 // ErrExpiryConflict — в одном запросе и срок, и «бессрочно».
@@ -705,6 +718,13 @@ func (s *Store) UpdateUser(ctx context.Context, id int64, p UpdateUserParams) (U
 	}
 	if p.ExpiresAt != nil && p.NoExpiry {
 		return User{}, ErrExpiryConflict
+	}
+	if p.Note != nil {
+		if len([]rune(*p.Note)) > maxNote {
+			return User{}, ErrNoteTooLong
+		}
+		sets = append(sets, "note = ?")
+		args = append(args, strings.TrimSpace(*p.Note))
 	}
 	if p.ExpiresAt != nil {
 		sets = append(sets, "expires_at = ?")
@@ -746,6 +766,13 @@ func (s *Store) UpdateUser(ctx context.Context, id int64, p UpdateUserParams) (U
 	}
 	if err != nil {
 		return User{}, err
+	}
+	// «Включить» замороженного — это разморозка: срок сдвигается на время
+	// паузы, а пометка снимается (freeze.go).
+	if p.Enabled != nil && *p.Enabled {
+		if _, err := unfreezeTx(ctx, tx, id, time.Now()); err != nil {
+			return User{}, err
+		}
 	}
 	res, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -898,7 +925,7 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 		                 WHERE p.user_id = u.id AND n.last_seen >= ?), 0),
 		       COALESCE((SELECT SUM(p.ips) FROM presence p JOIN nodes n ON n.id = p.node_id
 		                 WHERE p.user_id = u.id AND n.last_seen >= ?), 0),
-		       u.last_seen, u.reset_at, u.reset_kind
+		       u.last_seen, u.reset_at, u.reset_kind, u.frozen_at, u.note
 		FROM users u ` + where
 
 	// Присутствие считается только по нодам, которые выходили на связь
@@ -924,15 +951,17 @@ func (s *Store) queryUsers(ctx context.Context, where string, args ...any) ([]Us
 			seen      sql.NullString
 			plan      sql.NullInt64
 			resetAt   sql.NullString
+			frozenAt  sql.NullString
 		)
 		if err := rows.Scan(&u.ID, &u.Label, &enabled, &expires, &u.TrafficLimit,
 			&u.MaxIPs, &u.MaxConns, &u.SpeedLimit, &u.SubToken, &createdAt, &external, &u.Used, &plan,
-			&u.Online, &u.Devices, &seen, &resetAt, &u.TrafficReset); err != nil {
+			&u.Online, &u.Devices, &seen, &resetAt, &u.TrafficReset, &frozenAt, &u.Note); err != nil {
 			return nil, err
 		}
 		u.Enabled = enabled != 0
 		u.LastSeen = parseNullTime(seen)
 		u.TrafficResetAt = parseNullTime(resetAt)
+		u.FrozenAt = parseNullTime(frozenAt)
 		u.ExpiresAt = parseNullTime(expires)
 		u.CreatedAt = parse(createdAt)
 		u.ExternalID = external.String
@@ -1342,7 +1371,7 @@ func OlderVersion(a, b string) bool {
 func (s *Store) NodeUsers(ctx context.Context, nodeID int64) ([]users.User, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT u.id, u.enabled, u.expires_at, u.traffic_limit, u.max_ips, u.max_conns, u.speed_limit,
-		       c.kind, c.secret,
+		       u.devices_from, c.kind, c.secret,
 		       u.used_before + COALESCE((SELECT SUM(up + down) FROM usage WHERE user_id = u.id AND node_id <> ?), 0) - u.traffic_offset
 		FROM users u
 		JOIN credentials c ON c.user_id = u.id
@@ -1362,12 +1391,13 @@ func (s *Store) NodeUsers(ctx context.Context, nodeID int64) ([]users.User, erro
 			maxIPs    int
 			maxConns  int
 			speed     int64
+			devices   sql.NullString
 			kind      string
 			secret    string
 			elsewhere int64
 		)
 		if err := rows.Scan(&userID, &enabled, &expires, &limit, &maxIPs, &maxConns, &speed,
-			&kind, &secret, &elsewhere); err != nil {
+			&devices, &kind, &secret, &elsewhere); err != nil {
 			return nil, err
 		}
 
@@ -1392,6 +1422,10 @@ func (s *Store) NodeUsers(ctx context.Context, nodeID int64) ([]users.User, erro
 		}
 		if t := parseNullTime(expires); t != nil {
 			u.ExpiresAt = *t
+		}
+		// Только время сброса устройств, не адреса: адресов у панели нет.
+		if t := parseNullTime(devices); t != nil && maxIPs > 0 {
+			u.DevicesFrom = *t
 		}
 
 		if limit > 0 {

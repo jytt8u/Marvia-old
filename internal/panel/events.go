@@ -56,6 +56,9 @@ const (
 	EventWebhookFailed  = "webhook.failed"
 	EventAutoUpdate     = "autoupdate.update"
 	EventGuardUpdate    = "guard.update"
+	EventUserFreeze     = "user.freeze"
+	EventUserUnfreeze   = "user.unfreeze"
+	EventUserDevices    = "user.devices"
 )
 
 // ActorAdmin — действие сделано админским токеном. Ключи ботов записываются

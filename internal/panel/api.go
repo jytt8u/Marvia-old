@@ -83,6 +83,9 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/users/{id}/sub-token", a.scoped(ScopeUsers, a.rotateSubToken))
 	mux.HandleFunc("POST /api/v1/users/{id}/renew", a.scoped(ScopeUsers, a.renewUser))
 	mux.HandleFunc("POST /api/v1/users/{id}/reset-traffic", a.scoped(ScopeUsers, a.resetTraffic))
+	mux.HandleFunc("POST /api/v1/users/{id}/freeze", a.scoped(ScopeUsers, a.freezeUser))
+	mux.HandleFunc("POST /api/v1/users/{id}/unfreeze", a.scoped(ScopeUsers, a.unfreezeUser))
+	mux.HandleFunc("POST /api/v1/users/{id}/reset-devices", a.scoped(ScopeUsers, a.resetDevices))
 	mux.HandleFunc("POST /api/v1/qr", a.scoped(ScopeUsers, a.qrCode))
 	mux.HandleFunc("POST /api/v1/users/bulk", a.scoped(ScopeUsers, a.bulkUsers))
 	mux.HandleFunc("GET /api/v1/users.csv", a.scoped(ScopeRead, a.usersCSV))
@@ -502,11 +505,16 @@ func (a *API) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := a.store.UpdateUser(r.Context(), id, p.UpdateUserParams)
+	if errors.Is(err, ErrNoteTooLong) || errors.Is(err, ErrExpiryConflict) {
+		fail(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
 		respondStoreErr(w, err)
 		return
 	}
 
+	user = noteFor(r, user)
 	a.remember(r, scope, user.ID, map[string]any{"user": user})
 	a.record(r, EventUserUpdate, Event{UserID: user.ID, Detail: updateDetail(p.UpdateUserParams, p.ExtendBy)})
 	ok(w, map[string]any{"user": user})
@@ -1395,7 +1403,7 @@ func (a *API) rotateSubToken(w http.ResponseWriter, r *http.Request) {
 
 	a.record(r, EventSubToken, Event{UserID: user.ID, Detail: "сменён"})
 	ok(w, map[string]any{
-		"user": user,
+		"user": noteFor(r, user),
 		// Секретов здесь нет: меняется только адрес подписки, наборы доступа
 		// остаются прежними, и заново их панель не выдаёт.
 		"links": a.links(r.Context(), user, nil),
@@ -1628,7 +1636,25 @@ func withSecrets(r *http.Request, allowed bool) *http.Request {
 //
 // Нет пометки — значит запрос пришёл мимо scoped, и считаем его чужим:
 // показать лишнее хуже, чем не показать.
+// noteFor убирает заметку продавца из ответа всем, кроме админа.
+func noteFor(r *http.Request, u User) User {
+	if actorOf(r) != ActorAdmin {
+		u.Note = ""
+	}
+	return u
+}
+
 func visible(r *http.Request, list []User) []User {
+	// Заметка — для продавца в панели, а не для бота: «должен за прошлый
+	// месяц» не должно уезжать в чужие системы вместе со списком
+	// покупателей, даже ключу с правом на секреты.
+	if actorOf(r) != ActorAdmin {
+		stripped := make([]User, len(list))
+		for i, u := range list {
+			stripped[i] = noteFor(r, u)
+		}
+		list = stripped
+	}
 	if allowed, _ := r.Context().Value(secretsKey).(bool); allowed {
 		return list
 	}
@@ -1710,6 +1736,9 @@ func updateDetail(p UpdateUserParams, extend string) string {
 	}
 	if p.Label != nil {
 		parts = append(parts, "переименован")
+	}
+	if p.Note != nil {
+		parts = append(parts, "изменена заметка")
 	}
 	if len(parts) == 0 {
 		return "правка без изменений"

@@ -311,6 +311,7 @@ func (s *shell) showFull(tab string) {
 	x, y, width, height := fullPlacement(wa, int(dpi))
 	_, _, _ = procSetWindowPos.Call(s.hwnd, 0, uintptr(x), uintptr(y), uintptr(width), uintptr(height), swpNoZOrder|swpFrameChanged)
 	s.applyCaption(s.caption)
+	s.applyPin()
 	s.navigateView("full", tab)
 	_, _, _ = procShowWindow.Call(s.hwnd, swShow)
 	_, _, _ = procSetForegroundWindow.Call(s.hwnd)
@@ -332,6 +333,29 @@ func fullPlacement(wa rect, dpi int) (x, y, width, height int) {
 	x = int(wa.Left) + (areaW-width)/2
 	y = int(wa.Top) + (areaH-height)/2
 	return x, y, width, height
+}
+
+// pinSetting — закреплён ли виджет поверх всех окон.
+const pinSetting = "widget_pin"
+
+var (
+	hwndTopmost   = ^uintptr(0)     // HWND_TOPMOST, -1
+	hwndNoTopmost = ^uintptr(0) - 1 // HWND_NOTOPMOST, -2
+)
+
+const (
+	swpNoSize = 0x0001
+	swpNoMove = 0x0002
+)
+
+// applyPin держит виджет поверх всех окон, если так просили. Полное окно
+// поверх не держим никогда: оно закрывало бы всё, с чем человек работает.
+func (s *shell) applyPin() {
+	after := hwndNoTopmost
+	if s.widget && readUISetting(pinSetting) == "on" {
+		after = hwndTopmost
+	}
+	_, _, _ = procSetWindowPos.Call(s.hwnd, after, 0, 0, 0, 0, swpNoMove|swpNoSize)
 }
 
 // toggleWidget — нажатие на значок: виджет показать или спрятать.
@@ -359,6 +383,7 @@ func (s *shell) toggleWidget() {
 	s.navigateView("widget", "")
 	_, _, _ = procShowWindow.Call(s.hwnd, swShow)
 	_, _, _ = procSetForegroundWindow.Call(s.hwnd)
+	s.applyPin()
 }
 
 // Переключение трея не создаёт новую страницу: остаются форма ключа,

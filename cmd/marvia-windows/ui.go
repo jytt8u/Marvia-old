@@ -563,7 +563,7 @@ func hotkeyOn() bool { return readUISetting(hotkeySetting) != "off" }
 func quietOn() bool { return readUISetting(quietSetting) == "on" }
 
 func (u *ui) getTrayPrefs(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"hotkey": hotkeyOn(), "quiet": quietOn()})
+	writeJSON(w, http.StatusOK, map[string]any{"hotkey": hotkeyOn(), "quiet": quietOn(), "pin": readUISetting(pinSetting) == "on"})
 }
 
 func (u *ui) setTrayPrefs(w http.ResponseWriter, r *http.Request) {

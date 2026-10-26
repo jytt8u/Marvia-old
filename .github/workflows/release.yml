@@ -142,6 +142,10 @@ jobs:
     # На ручном запуске Android пропущен — остальное собирается всё равно.
     if: ${{ !cancelled() && (needs.android.result == 'success' || needs.android.result == 'skipped') }}
     runs-on: ubuntu-latest
+    # Токен подписи Windows — в окружении задачи, чтобы шаги могли спросить,
+    # есть ли он: секреты в условиях шагов напрямую не читаются.
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -222,12 +226,74 @@ jobs:
           # сверяет с SHA256SUMS — а не из ветки, которая меняется в любой миг.
           cp scripts/upgrade.sh dist/upgrade.sh
 
+      # Подпись Authenticode через SignPath — пока токена нет, шаг пропускается
+      # и выпуск выходит как раньше, без подписи. С подписью SmartScreen
+      # перестаёт пугать «Windows защитила ваш компьютер» (docs/guide.md,
+      # «SmartScreen»). Токен и номера проекта кладёт владелец: секрет
+      # SIGNPATH_API_TOKEN и переменные SIGNPATH_ORGANIZATION_ID,
+      # SIGNPATH_PROJECT и SIGNPATH_POLICY.
+      - name: Отдать на подпись EXE
+        id: exe-upload
+        if: env.SIGNPATH_API_TOKEN != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: exe-unsigned
+          path: dist/marvia-windows.exe
+          if-no-files-found: error
+
+      - name: Подписать EXE
+        if: env.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY }}
+          github-artifact-id: ${{ steps.exe-upload.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-exe
+
+      - name: Подставить подписанный EXE
+        if: env.SIGNPATH_API_TOKEN != ''
+        run: cp "signed-exe/marvia-windows.exe" "dist/marvia-windows.exe"
+
       - name: Собрать полный комплект Windows
         run: sudo apt-get update && sudo apt-get install -y nsis
 
       - name: Упаковать установщик и переносимый комплект Windows
         shell: pwsh
         run: ./scripts/package-windows.ps1 -Exe ./dist/marvia-windows.exe -OutputDirectory ./dist -Version $env:MARVIA_BUILD_VERSION
+
+      # Подпись Authenticode через SignPath — пока токена нет, шаг пропускается
+      # и выпуск выходит как раньше, без подписи. С подписью SmartScreen
+      # перестаёт пугать «Windows защитила ваш компьютер» (docs/guide.md,
+      # «SmartScreen»). Токен и номера проекта кладёт владелец: секрет
+      # SIGNPATH_API_TOKEN и переменные SIGNPATH_ORGANIZATION_ID,
+      # SIGNPATH_PROJECT и SIGNPATH_POLICY.
+      - name: Отдать на подпись установщик
+        id: setup-upload
+        if: env.SIGNPATH_API_TOKEN != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-unsigned
+          path: dist/marvia-windows-setup.exe
+          if-no-files-found: error
+
+      - name: Подписать установщик
+        if: env.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY }}
+          github-artifact-id: ${{ steps.setup-upload.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-setup
+
+      - name: Подставить подписанный установщик
+        if: env.SIGNPATH_API_TOKEN != ''
+        run: cp "signed-setup/marvia-windows-setup.exe" "dist/marvia-windows-setup.exe"
 
       - name: Взять подписанный APK
         if: needs.android.outputs.signed == 'true'

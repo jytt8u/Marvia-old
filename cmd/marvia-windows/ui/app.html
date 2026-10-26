@@ -2418,6 +2418,9 @@
       <span class="wordmark">MARVIA</span>
     </div>
     <div class="acts">
+      <button id="w-pin" type="button" title="" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 6 3 3H7l3-3-1-6zM12 13v7"/></svg>
+      </button>
       <button id="w-full" type="button" title="">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-8 8"/><path d="M20 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4"/></svg>
       </button>
@@ -2587,6 +2590,7 @@ const T = {
     killSwitchFailed: (e) => "Не встал, туннель работает без него: " + e,
     lanOutside: "Домашняя сеть мимо туннеля",
     lanOutsideHint: "Принтер, сетевой диск или камера — частные адреса 10.x, 172.16–31.x и 192.168.x идут напрямую. Свою подсеть Windows и так ведёт мимо туннеля — это для соседних. В чужом Wi-Fi домашняя сеть чужая: включай осознанно.",
+    wPin: "Поверх всех окон",
     hotkeyName: "Горячая клавиша Ctrl+Alt+M",
     hotkeyHint: "Подключить или отключить из любой программы, не открывая окна.",
     quietName: "Тихий режим",
@@ -2925,6 +2929,7 @@ const T = {
     killSwitchFailed: (e) => "Did not start, the tunnel runs without it: " + e,
     lanOutside: "Home network around the tunnel",
     lanOutsideHint: "Printer, network drive or camera — private addresses 10.x, 172.16–31.x and 192.168.x go directly. Windows already keeps your own subnet outside the tunnel — this is for the neighbouring ones. On someone else's Wi-Fi the home network is theirs: turn it on deliberately.",
+    wPin: "Always on top",
     hotkeyName: "Hotkey Ctrl+Alt+M",
     hotkeyHint: "Connect or disconnect from any program without opening the window.",
     quietName: "Quiet mode",
@@ -3252,6 +3257,7 @@ function paintStatic() {
   $("lang-2").title = d.switchTitle;
   $("w-full").title = d.wOpen;
   $("w-hide").title = d.wHide;
+  $("w-pin").title = d.wPin;
   $("welcome-ru").setAttribute("aria-pressed", String(lang === "ru"));
   $("welcome-en").setAttribute("aria-pressed", String(lang === "en"));
 
@@ -3357,6 +3363,12 @@ on("about-link", "click", () => {
 });
 on("w-full", "click", () => api("POST", "api/window", { mode: "full", tab: "home" }).catch(() => {}));
 on("w-hide", "click", () => api("POST", "api/window", { mode: "hide" }).catch(() => {}));
+// Закрепить виджет поверх всех окон — запоминает программа.
+on("w-pin", "click", () => {
+  const pinned = $("w-pin").getAttribute("aria-pressed") !== "true";
+  $("w-pin").setAttribute("aria-pressed", String(pinned));
+  winAct(pinned ? "pin" : "unpin");
+});
 
 // ── заголовок окна ──
 //
@@ -4775,6 +4787,7 @@ async function paintTray() {
     $("hotkey").dataset.on = String(!!p.hotkey);
     $("quiet").textContent = p.quiet ? d.autostartOn : d.autostartOff;
     $("quiet").dataset.on = String(!!p.quiet);
+    $("w-pin").setAttribute("aria-pressed", String(!!p.pin));
   } catch (_) { /* покажем при следующем заходе */ }
 }
 for (const id of ["hotkey", "quiet"]) {

@@ -48,7 +48,7 @@ const (
 // windowActions — всё, что умеют кнопки и шапка страницы. Тест сверяет
 // список с разметкой: кнопка без действия здесь была бы обещанием, которое
 // окно не выполняет.
-var windowActions = []string{"drag", "top", "min", "max", "close", "state", "through", "solid"}
+var windowActions = []string{"drag", "top", "min", "max", "close", "state", "through", "solid", "pin", "unpin"}
 
 // ncCalcSizeParams — начало NCCALCSIZE_PARAMS: три прямоугольника. Указатель на
 // WINDOWPOS после них нам не нужен, а читаем мы только первый прямоугольник.
@@ -120,6 +120,12 @@ func (s *shell) windowAction(action string) bool {
 		// Страница только что загрузилась — ей нужно и место окна на экране:
 		// по нему «Прозрачная» сдвигает обои рабочего стола.
 		s.place()
+	case "pin", "unpin":
+		// Виджет поверх всех окон — для стримера, у которого скорость должна
+		// быть видна поверх игры. Запоминаем: закреплённый виджет и после
+		// перезапуска встаёт закреплённым.
+		_ = writeUISetting(pinSetting, map[bool]string{true: "on", false: "off"}[action == "pin"])
+		s.applyPin()
 	case "through", "solid":
 		// «Прозрачная» с видом «всё, что позади» — см. seethrough_windows.go.
 		s.seeThrough(action == "through")

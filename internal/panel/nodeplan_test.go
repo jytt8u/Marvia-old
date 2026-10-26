@@ -99,3 +99,35 @@ func TestHosterLimitShowsThisPeriodsUsage(t *testing.T) {
 		t.Fatalf("день сброса 31 принят: код %d", code)
 	}
 }
+
+// Запасная нода не выходит в подписки, пока основная жива, — её адреса нет
+// ни у кого, — и выходит сама, когда основная легла.
+func TestStandbyNodeAppearsOnlyWhenItsPrimaryIsDown(t *testing.T) {
+	h := newHarness(t)
+	primary := h.createNode("main-1")
+	standby := h.createNode("spare-1")
+	h.nodeUsers(primary.Token) // основная на связи
+	if code := h.do(http.MethodPatch, "/api/v1/nodes/"+itoa(standby.Node.ID), adminToken, map[string]any{"standby_for": primary.Node.ID}, nil); code != http.StatusOK {
+		t.Fatalf("назначение запасной: код %d", code)
+	}
+	created := h.createUser(0)
+	if body := h.subJSON(created.User.SubToken); strings.Contains(body, "spare-1") || !strings.Contains(body, "main-1") {
+		t.Fatalf("при живой основной: %s", body)
+	}
+	if len(h.nodeUsers(standby.Token)) == 0 {
+		t.Fatal("запасная не получает покупателей и не сможет принять их сразу")
+	}
+	h.do(http.MethodPatch, "/api/v1/nodes/"+itoa(primary.Node.ID), adminToken, map[string]any{"enabled": false}, nil)
+	if body := h.subJSON(created.User.SubToken); !strings.Contains(body, "spare-1") {
+		t.Fatalf("основная легла, а запасной в подписке нет: %s", body)
+	}
+	for _, bad := range []int64{standby.Node.ID} {
+		if code := h.do(http.MethodPatch, "/api/v1/nodes/"+itoa(standby.Node.ID), adminToken, map[string]any{"standby_for": bad}, nil); code != http.StatusBadRequest {
+			t.Fatalf("запасная для самой себя: код %d", code)
+		}
+	}
+	other := h.createNode("x")
+	if code := h.do(http.MethodPatch, "/api/v1/nodes/"+itoa(other.Node.ID), adminToken, map[string]any{"standby_for": standby.Node.ID}, nil); code != http.StatusBadRequest {
+		t.Fatalf("запасная для запасной: код %d", code)
+	}
+}

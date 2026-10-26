@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"time"
 )
 
 // Каскад: вход в стране покупателя и зарубежная нода-выход.
@@ -174,5 +175,9 @@ func (s *Store) SubscriptionNodes(ctx context.Context, group string) ([]Node, er
 	if err != nil {
 		return nil, err
 	}
-	return forGroup(viaEntries(nodes), group), nil
+	// Запасные — только вместо легших основных; сводка отчётов не
+	// прочиталась — считаем основные здоровыми по ней, но молчание и
+	// выключение видно и без неё.
+	health, _ := s.NodeHealth(ctx)
+	return forGroup(withStandby(viaEntries(nodes), health, time.Now()), group), nil
 }

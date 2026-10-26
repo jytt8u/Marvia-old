@@ -3597,6 +3597,18 @@ function nodeSheet(node) {
     field(d.node.limitGB[0], "nd-limit", "number", node.monthly_limit ? Math.round(node.monthly_limit / 1024 ** 3) : "", d.node.limitGB[1]),
     field(d.node.limitDay, "nd-limit-day", "number", node.limit_day || 1),
     field(d.node.groups[0], "nd-groups", "text", (node.groups || []).join(", "), d.node.groups[1]),
+    // Запасная — для обычной ноды, не для входа и не для другой запасной.
+    (() => {
+      const pick = el("select", { id: "nd-standby" });
+      pick.append(el("option", { value: "0", text: d.node.standbyNone }));
+      for (const other of state.nodes || []) {
+        if (other.id === node.id || other.standby_for || other.exit_id) continue;
+        const option = el("option", { value: String(other.id), text: other.name || other.address });
+        if (other.id === node.standby_for) option.setAttribute("selected", "");
+        pick.append(option);
+      }
+      return el("label", { text: d.node.standbyFor }, pick);
+    })(),
     field(d.node.maintFrom, "nd-mfrom", "datetime-local", localInput(node.maint_from)),
     field(d.node.maintUntil, "nd-muntil", "datetime-local", localInput(node.maint_until)),
   ];
@@ -3631,6 +3643,7 @@ function nodeSheet(node) {
       patch.monthly_limit = Math.round(num("nd-limit") * 1024 ** 3);
       patch.limit_day = num("nd-limit-day") || 1;
       patch.groups = val("nd-groups").split(",").map((x) => x.trim()).filter(Boolean);
+      patch.standby_for = Number(document.getElementById("nd-standby").value) || 0;
       const mf = val("nd-mfrom"), mu = val("nd-muntil");
       // Пустой конец снимает окно; заполненный — ставит его с начала или
       // прямо сейчас, если начало не указано.
@@ -4404,7 +4417,7 @@ const TEXTS = {
     nodesPage: {
       empty: "Ни одной ноды. Установщик раздаёт сама панель — заведи ноду и получишь команду.",
       online: "НА СВЯЗИ", silent: "МОЛЧИТ", off: "ВЫКЛЮЧЕНА",
-      silentShort: "молчит", offShort: "выкл", maintShort: "обслуживание", maintState: "Обслуживание",
+      standby: (name) => "запасная для " + name, silentShort: "молчит", offShort: "выкл", maintShort: "обслуживание", maintState: "Обслуживание",
       via: (exit) => "вход → " + exit,
       slow: "РЕЖУТ", kbps: (k) => "~" + k + " кбит/с",
     },
@@ -4678,6 +4691,7 @@ const TEXTS = {
       planGroup: ["Группа нод", "Пусто — только ноды для всех"],
       maintFrom: "Обслуживание с", maintUntil: "Обслуживание до (пусто — без окна)",
       maintEnd: "Закончить обслуживание", hoster: "У хостера за месяц",
+      standbyFor: "Запасная для", standbyNone: "— обычная нода —",
       load: "Нагрузка", loadText: (l, c) => l + " на " + c + " " + pluralRU(c, "ядро", "ядра", "ядер"), mem: (u, t) => "память " + u + " из " + t, maint: "Обслуживание", maintNow: "идёт: ", maintPlanned: "назначено: ",
       fpDefault: "chrome — по умолчанию",
       byIP: "По IP", countryAuto: "Пусто — панель узнает по IP сама",
@@ -4973,7 +4987,7 @@ const TEXTS = {
     nodesPage: {
       empty: "No nodes yet. The panel serves the installer itself — add a node and you get the command.",
       online: "ONLINE", silent: "SILENT", off: "DISABLED",
-      silentShort: "silent", offShort: "off", maintShort: "maintenance", maintState: "Maintenance",
+      standby: (name) => "standby for " + name, silentShort: "silent", offShort: "off", maintShort: "maintenance", maintState: "Maintenance",
       via: (exit) => "entry → " + exit,
       slow: "THROTTLED", kbps: (k) => "~" + k + " kbit/s",
     },
@@ -5247,6 +5261,7 @@ const TEXTS = {
       planGroup: ["Node group", "Empty — only nodes for everyone"],
       maintFrom: "Maintenance from", maintUntil: "Maintenance until (empty — none)",
       maintEnd: "End maintenance", hoster: "Hoster this month",
+      standbyFor: "Standby for", standbyNone: "— a regular node —",
       load: "Load", loadText: (l, c) => l + " on " + c + (c === 1 ? " core" : " cores"), mem: (u, t) => "memory " + u + " of " + t, maint: "Maintenance", maintNow: "in progress: ", maintPlanned: "scheduled: ",
       fpDefault: "chrome — default",
       byIP: "By IP", countryAuto: "Empty — the panel finds it by IP",
@@ -6080,7 +6095,8 @@ function renderVals() {
     const fl = flagOf(n.country);
     // Вход каскада сам трафика не считает — его считает выход, — поэтому
     // вместо доли важнее, куда он ведёт.
-    const via = n.exit_id ? d18.nodesPage.via(nodeName.get(n.exit_id) || "?") + " · " : "";
+    const via = (n.exit_id ? d18.nodesPage.via(nodeName.get(n.exit_id) || "?") + " · " : "")
+      + (n.standby_for ? d18.nodesPage.standby(nodeName.get(n.standby_for) || "?") + " · " : "");
     return Object.assign({}, fl, {
       onClick: () => nodeSheet(n),
       name: n.name || n.address,

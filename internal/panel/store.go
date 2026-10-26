@@ -187,6 +187,10 @@ type Node struct {
 	// Sys — нагрузка машины по последнему отчёту ноды (fleet.go).
 	Sys *NodeSys `json:"sys,omitempty"`
 
+	// StandbyFor — запасная для этой ноды: в подписках только когда та
+	// легла (standby.go). Ноль — обычная нода.
+	StandbyFor int64 `json:"standby_for,omitempty"`
+
 	// Version и Arch — сборка ноды, как она сама сообщила в последнем
 	// отчёте. Пусто у нод старше этой возможности: они версию не шлют.
 	Version string `json:"version,omitempty"`
@@ -485,6 +489,8 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE nodes ADD COLUMN sys_mem_avail INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE nodes ADD COLUMN sys_at TEXT`,
 		`ALTER TABLE nodes ADD COLUMN upgrade_asked TEXT`,
+		// Запасная нода (standby.go).
+		`ALTER TABLE nodes ADD COLUMN standby_for INTEGER REFERENCES nodes(id) ON DELETE SET NULL`,
 		`CREATE TABLE IF NOT EXISTS node_guard (node_id INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE, hour TEXT NOT NULL, by_rate INTEGER NOT NULL DEFAULT 0, by_open INTEGER NOT NULL DEFAULT 0, by_block INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (node_id, hour))`,
 	}
 
@@ -1184,7 +1190,7 @@ func (s *Store) queryNodes(ctx context.Context, where string, args ...any) ([]No
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, name, country, address, sni, sni_extra, public_key, reality_public_key, reality_short_id, ws_path, quic, enabled, last_seen, created_at, version, arch, upgrade_to, fingerprint, COALESCE(exit_id, 0),
 		        monthly_limit, limit_day, maint_from, maint_until, node_groups,
-		        sys_load, sys_cpus, sys_mem_total, sys_mem_avail, sys_at
+		        sys_load, sys_cpus, sys_mem_total, sys_mem_avail, sys_at, COALESCE(standby_for, 0)
 		 FROM nodes `+where+` ORDER BY id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("чтение нод: %w", err)
@@ -1210,7 +1216,7 @@ func (s *Store) queryNodes(ctx context.Context, where string, args ...any) ([]No
 			&n.RealityPublicKey, &n.RealityShortID, &n.WSPath, &quicOn, &enabled, &lastSeen, &createdAt,
 			&n.Version, &n.Arch, &n.UpgradeTo, &n.Fingerprint, &n.ExitID,
 			&n.MonthlyLimit, &n.LimitDay, &mFrom, &mUntil, &groups,
-			&sys.Load, &sys.CPUs, &sys.MemTotal, &sys.MemAvail, &sysAt); err != nil {
+			&sys.Load, &sys.CPUs, &sys.MemTotal, &sys.MemAvail, &sysAt, &n.StandbyFor); err != nil {
 			return nil, err
 		}
 		if at := parseNullTime(sysAt); at != nil {
@@ -1309,6 +1315,9 @@ type UpdateNodeParams struct {
 
 	// Groups — для кого нода; пустой список — для всех.
 	Groups *[]string `json:"groups,omitempty"`
+
+	// StandbyFor — чья это запасная; 0 — снова обычная нода.
+	StandbyFor *int64 `json:"standby_for,omitempty"`
 }
 
 // UpdateNode меняет заданные поля ноды.
@@ -1400,6 +1409,13 @@ func (s *Store) UpdateNode(ctx context.Context, id int64, p UpdateNodeParams) (N
 			sets = append(sets, "maint_from = ?", "maint_until = ?")
 			args = append(args, format(p.Maintenance.From.UTC()), format(p.Maintenance.Until.UTC()))
 		}
+	}
+	if p.StandbyFor != nil {
+		if err := s.checkStandby(ctx, id, *p.StandbyFor); err != nil {
+			return Node{}, err
+		}
+		sets = append(sets, "standby_for = ?")
+		args = append(args, nullID(*p.StandbyFor))
 	}
 	if p.Groups != nil {
 		groups, err := cleanGroups(*p.Groups)

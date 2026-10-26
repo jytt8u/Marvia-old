@@ -36,6 +36,10 @@ type API struct {
 	subBase          string // базовый адрес подписок, например https://sub.example.com
 	distDir          string // где лежат бинарники для раздачи новым нодам
 
+	// restorePath и restart — восстановление из копии (restore.go).
+	restorePath string
+	restart     func()
+
 	// panelIPs вписываются в ссылку доступа, чтобы клиент не спрашивал имя
 	// домена подписки у резолвера провайдера. Подробности — в links.go.
 	panelIPs []string
@@ -206,6 +210,9 @@ func (a *API) Handler() http.Handler {
 
 	// Версия — с авторизацией. Продавцу она нужна, когда он пишет в поддержку;
 	// постороннему сканеру знать её незачем.
+	mux.HandleFunc("GET /api/v1/me", a.me)
+	mux.HandleFunc("POST /api/v1/restore", a.admin(a.restoreBackup))
+	mux.HandleFunc("POST /api/v1/login", a.login)
 	mux.HandleFunc("GET /api/v1/version", a.scoped(ScopeRead, func(w http.ResponseWriter, _ *http.Request) {
 		version := a.version
 		if version == "" {

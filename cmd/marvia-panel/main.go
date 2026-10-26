@@ -167,6 +167,14 @@ func run(opts options) error {
 		return errors.New("-acme-domain и -tls-cert вместе не работают: сертификат либо получает панель, либо даёшь его ты")
 	}
 
+	// Копия, подготовленная кнопкой «Восстановить» (internal/panel/restore.go),
+	// встаёт на место базы до её открытия.
+	if done, err := panel.ApplyStagedRestore(opts.dbPath, time.Now()); err != nil {
+		return err
+	} else if done {
+		log.Printf("база восстановлена из копии")
+	}
+
 	store, err := panel.Open(opts.dbPath)
 	if err != nil {
 		return err
@@ -220,6 +228,12 @@ func run(opts options) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// Перезапуск после восстановления — выходом с ошибкой: служба стоит с
+	// Restart=on-failure и поднимет панель, а та при запуске подменит базу.
+	api.WithRestore(opts.dbPath, func() {
+		log.Printf("копия подготовлена, перезапускаюсь для подмены базы")
+		os.Exit(3)
+	})
 
 	// Уборка по сроку идёт и дальше, а не только при запуске: панель
 	// работает месяцами, и разовая чистка на старте означала бы, что

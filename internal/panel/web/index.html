@@ -475,6 +475,10 @@
   .pill.plain::before { display: none; }
   .pill.ok { color: var(--ok); background: var(--okSoft); }
   .pill.warn { color: var(--warnInk); background: var(--warnSoft); }
+  .readonly-note { display: inline-flex; margin-bottom: 12px; }
+  /* «Только смотреть»: главные кнопки страниц и выбор галочками прячем —
+     действие всё равно отказал бы сервер. */
+  body.readonly .page-actions .btn-primary, body.readonly .pick-bar { display: none; }
   .note.warn { color: var(--warnInk); }
   .pill.acc { color: var(--fg); background: var(--accSoft); }
   .pill.acc::before { background: var(--acc); }
@@ -1175,6 +1179,9 @@
       <!-- Ключ прокрутки свой у каждого раздела: при перерисовке место
            сохраняется, а при переходе в другой раздел страница начинается сверху. -->
       <main class="p-main" data-keep-scroll="main-{{ page }}">
+        <sc-if value="{{ readOnlyNote }}">
+          <div class="pill plain readonly-note">{{ readOnlyNote }}</div>
+        </sc-if>
         <div class="page-head">
           <div class="page-titles">
             <h1 class="h1">{{ pageTitle }}</h1>
@@ -1831,6 +1838,7 @@
               <div class="actions">
                 <button type="button" class="btn btn-primary" onClick="{{ saveScheduledBackups }}">{{ d18.bk.save }}</button>
                 <button type="button" class="btn btn-secondary" onClick="{{ runScheduledBackup }}">{{ d18.bk.run }}</button>
+                <button type="button" class="btn btn-secondary" onClick="{{ openRestore }}">{{ d18.restore.open }}</button>
               </div>
               <div class="help card-foot">{{ d18.bk.runNote }} {{ scheduledBackupStatus }}</div>
             </div>
@@ -2464,7 +2472,8 @@ async function loadAll(quiet) {
     // Ключи — только админу. Вошедший ключом бота получает на них 403, и
     // это не ошибка загрузки, а ответ «кто ты»: разделы админа ему не
     // показываем, а остальное грузим как обычно.
-    const [users, nodes, stats, keys, plans] = await Promise.all([
+    const [me, users, nodes, stats, keys, plans] = await Promise.all([
+      api("/api/v1/me"),
       api("/api/v1/users"),
       api("/api/v1/nodes"),
       api("/api/v1/stats?days=30"),
@@ -2475,6 +2484,11 @@ async function loadAll(quiet) {
       api("/api/v1/plans"),
     ]);
     state.admin = !(keys && keys.denied);
+    // Только смотреть — ключ без права users: помощнику продавца. Кнопки,
+    // которые меняют, ему не рисуем; отказ всё равно дал бы сервер.
+    state.me = (me && me.me) || null;
+    state.readOnly = !!state.me && !state.me.admin && !(state.me.scopes || []).includes("users");
+    document.body.classList.toggle("readonly", state.readOnly);
     state.users = (users && users.users) || [];
     state.nodes = (nodes && nodes.nodes) || [];
     state.stats = stats || null;
@@ -2564,7 +2578,7 @@ function sheet(title, body, buttons, onClose) {
     const row = el("div", { cls: "row" });
     // null — кнопка, которой здесь нет: окну ноды «Вход в России» положен
     // только у обычной ноды.
-    for (const b of buttons) if (b) row.append(b);
+    for (const b of buttons) if (b && !(state.readOnly && !SAFE_BUTTONS().includes(b.textContent))) row.append(b);
     box.append(row);
   }
 
@@ -2594,6 +2608,13 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault(); first.focus();
   }
 });
+
+// SAFE_BUTTONS — что можно нажать помощнику «только смотреть»: закрыть,
+// вернуться, посмотреть ссылки и скопировать. Остальное меняет панель.
+function SAFE_BUTTONS() {
+  const d = L();
+  return [d.act.close, d.act.back, d.act.cancel, d.act.copy, d.user.links, d.user.more];
+}
 
 function btn(text, cls, fn) {
   return el("button", { type: "button", cls: cls || "", text, on: { click: fn } });
@@ -3780,6 +3801,35 @@ function botTextsSheet() {
   });
 }
 
+// restoreSheet — восстановление из копии (restore.go). Подтверждение с
+// последствием обязательно: нынешняя база уйдёт в сторону, и всё, что
+// случилось после копии, в панели пропадёт.
+function restoreSheet() {
+  const d = L();
+  const file = el("input", { id: "rs-file", type: "file", accept: ".db,.sealed,application/octet-stream" });
+  sheet(d.restore.title, [
+    el("div", { cls: "note warn", text: d.restore.warn }),
+    el("label", { text: d.restore.file }, file),
+    field(d.restore.password[0], "rs-password", "password", "", d.restore.password[1]),
+  ], [
+    btn(d.restore.go, "bad", () => act(async () => {
+      const picked = file.files && file.files[0];
+      if (!picked) throw new Error(d.restore.noFile);
+      const [title, text, word] = d.restore.ask;
+      if (!await ask(title, text, word)) return;
+      const res = await fetch("/api/v1/restore", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + state.token, "Content-Type": "application/octet-stream", "X-Backup-Password": val("rs-password") },
+        body: picked,
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || ("код " + res.status));
+      sheet(d.restore.title, [el("div", { cls: "note", text: d.restore.done(body.clients, body.nodes) })], [btn(d.act.close, "", () => location.reload())]);
+    })),
+    btn(d.act.cancel, "", closeSheet),
+  ]);
+}
+
 function exportClients() {
   act(async () => {
     const res = await fetch("/api/v1/users/export.csv", { headers: { Authorization: "Bearer " + state.token } });
@@ -4165,6 +4215,16 @@ const TEXTS = {
     },
 
     cta: { dash: "+ Выдать доступ", clients: "+ Клиент", nodes: "+ Нода", keys: "+ Ключ", plans: "Тарифы", guard: "Защита", export: "Выгрузить CSV", report: "Отчёт за месяц" },
+    readonly: { note: (name) => "Только смотреть — ключ «" + name + "»" },
+    restore: {
+      open: "Восстановить из копии…", title: "Восстановить из копии",
+      warn: "Всё, что случилось после копии, пропадёт. Нынешняя база не удаляется — она ляжет рядом с именем .before-restore.",
+      file: "Файл копии: «Копия базы» (.db) или парольная копия",
+      password: ["Пароль копии", "Только для парольной копии"],
+      go: "Восстановить", noFile: "Выбери файл копии",
+      ask: ["Восстановить панель из копии?", "Панель проверит копию, перезапустится и откроется уже с ней. Клиенты, ноды и настройки станут такими, как в копии.", "Восстановить"],
+      done: (c, n) => "Копия принята: клиентов " + c + ", нод " + n + ". Панель перезапускается — обнови страницу через полминуты.",
+    },
     report: {
       title: "Отчёт за месяц", month: "Месяц",
       new: "Новых клиентов", renewals: "Продлений", promos: "Применено промокодов",
@@ -4350,7 +4410,7 @@ const TEXTS = {
         "plan.create": "новый тариф", "plan.update": "правка тарифа", "plan.delete": "тариф удалён",
         "panel.upgrade": "обновление панели",
         "nodes.upgrade": "обновление нод",
-        "autoupdate.update": "автообновление", "guard.update": "защита нод", "user.freeze": "заморозка", "user.unfreeze": "разморозка", "user.devices": "сброс устройств", "promo.create": "заведён промокод", "promo.delete": "удалён промокод", "user.promo": "применён промокод", "referral.update": "награда за приглашённых", "user.referral": "награда за приглашённого", "bot_texts.update": "тексты для бота", "users.export": "выгрузка клиентов",
+        "autoupdate.update": "автообновление", "guard.update": "защита нод", "user.freeze": "заморозка", "user.unfreeze": "разморозка", "user.devices": "сброс устройств", "promo.create": "заведён промокод", "promo.delete": "удалён промокод", "user.promo": "применён промокод", "referral.update": "награда за приглашённых", "user.referral": "награда за приглашённого", "bot_texts.update": "тексты для бота", "panel.login": "вход в панель", "panel.restore": "восстановление из копии", "users.export": "выгрузка клиентов",
       },
     },
     updates: {
@@ -4719,6 +4779,16 @@ const TEXTS = {
     },
 
     cta: { dash: "+ Give access", clients: "+ Client", nodes: "+ Node", keys: "+ Key", plans: "Plans", guard: "Protection", export: "Export CSV", report: "Monthly report" },
+    readonly: { note: (name) => "View only — key “" + name + "”" },
+    restore: {
+      open: "Restore from backup…", title: "Restore from backup",
+      warn: "Everything after the backup is lost. The current database is not deleted — it is kept next to it as .before-restore.",
+      file: "Backup file: “Database copy” (.db) or a password backup",
+      password: ["Backup password", "Only for a password backup"],
+      go: "Restore", noFile: "Pick a backup file",
+      ask: ["Restore the panel from a backup?", "The panel checks the backup, restarts and opens with it. Clients, nodes and settings become what the backup has.", "Restore"],
+      done: (c, n) => "Backup accepted: " + c + " clients, " + n + " nodes. The panel is restarting — reload the page in half a minute.",
+    },
     report: {
       title: "Monthly report", month: "Month",
       new: "New clients", renewals: "Renewals", promos: "Promo codes applied",
@@ -4904,7 +4974,7 @@ const TEXTS = {
         "plan.create": "new plan", "plan.update": "plan edited", "plan.delete": "plan deleted",
         "panel.upgrade": "panel upgrade",
         "nodes.upgrade": "nodes upgrade",
-        "autoupdate.update": "auto-update", "guard.update": "node protection", "user.freeze": "frozen", "user.unfreeze": "unfrozen", "user.devices": "devices reset", "promo.create": "promo code added", "promo.delete": "promo code deleted", "user.promo": "promo code applied", "referral.update": "referral reward", "user.referral": "referral bonus", "bot_texts.update": "bot messages", "users.export": "clients exported",
+        "autoupdate.update": "auto-update", "guard.update": "node protection", "user.freeze": "frozen", "user.unfreeze": "unfrozen", "user.devices": "devices reset", "promo.create": "promo code added", "promo.delete": "promo code deleted", "user.promo": "promo code applied", "referral.update": "referral reward", "user.referral": "referral bonus", "bot_texts.update": "bot messages", "panel.login": "panel sign-in", "panel.restore": "restored from backup", "users.export": "clients exported",
       },
     },
     updates: {
@@ -6297,6 +6367,7 @@ function renderVals() {
     pageCta2: page === "nodes" ? d18.cta.guard : page === "stats" ? d18.cta.report : d18.cta.plans,
     doCta2: () => (page === "nodes" ? guardSheet() : page === "stats" ? reportSheet() : plansSheet()),
     hasCta3: page === "clients" && state.admin,
+    readOnlyNote: state.readOnly ? d18.readonly.note(state.me.name) : "",
     pageCta3: d18.cta.export,
     doCta3: () => exportClients(),
 
@@ -6361,6 +6432,7 @@ function renderVals() {
     webhookStatus: state.webhooks
       ? (state.webhooks.enabled ? d18.wh.pending(state.webhooks.pending || 0) : d18.wh.off) : "",
     openBotTexts: () => botTextsSheet(),
+    openRestore: () => restoreSheet(),
     saveWebhooks: () => act(async () => {
       await api("/api/v1/webhooks", "PUT", {
         enabled: document.getElementById("wh-on").checked,
@@ -6676,9 +6748,9 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
   err.textContent = L().login.checking;
   state.token = token;
   try {
-    // Проверяем токен самой дешёвой ручкой: узнать версию может только тот,
-    // кто уже вошёл, так что отказ здесь — это отказ везде.
-    await api("/api/v1/version");
+    // Проверяем токен входом: он же пишет в журнал, кто и откуда вошёл.
+    // Перезагрузка страницы входом не считается — там /me без записи.
+    await api("/api/v1/login", "POST");
     try { localStorage.setItem(TOKEN_KEY, token); } catch (_) { /* приватное окно */ }
     err.textContent = "";
     enter(token);

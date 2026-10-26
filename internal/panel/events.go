@@ -66,6 +66,8 @@ const (
 	EventReferralUpdate = "referral.update"
 	EventUserReferral   = "user.referral"
 	EventBotTexts       = "bot_texts.update"
+	EventPanelLogin     = "panel.login"
+	EventPanelRestore   = "panel.restore"
 
 	// ActorBonus — от чьего имени пишется награда за приглашённого: её
 	// выдаёт не админ и не бот, а правило, которое продавец включил.

@@ -3612,6 +3612,13 @@ function nodeSheet(node) {
     field(d.node.maintFrom, "nd-mfrom", "datetime-local", localInput(node.maint_from)),
     field(d.node.maintUntil, "nd-muntil", "datetime-local", localInput(node.maint_until)),
   ];
+  // Проверка из страны покупателей: у входа — его стук до выхода, у выхода —
+  // стук всех его входов (fleet.go).
+  const probeText = (p) => p.ok ? d.node.probeOK(p.tcp_ms, sinceLabel(p.at)) : d.node.probeFail(p.fails, sinceLabel(p.at));
+  if (node.probe) stateFacts.push([d.node.probe, probeText(node.probe)]);
+  for (const e of (state.nodes || []).filter((x) => x.exit_id === node.id && x.probe)) {
+    stateFacts.push([d.node.probeVia(e.name || e.address), probeText(e.probe)]);
+  }
   if (node.sys && node.sys.cpus) {
     const s = node.sys;
     const mem = s.mem_total ? " · " + d.node.mem(bytes(s.mem_total - s.mem_avail), bytes(s.mem_total)) : "";
@@ -4692,6 +4699,8 @@ const TEXTS = {
       maintFrom: "Обслуживание с", maintUntil: "Обслуживание до (пусто — без окна)",
       maintEnd: "Закончить обслуживание", hoster: "У хостера за месяц",
       standbyFor: "Запасная для", standbyNone: "— обычная нода —",
+      probe: "До выхода из России", probeVia: (name) => "Из России через «" + name + "»",
+      probeOK: (ms, ago) => "доходит, " + ms + " мс · " + ago, probeFail: (n, ago) => "не доходит " + n + " раз подряд · " + ago,
       load: "Нагрузка", loadText: (l, c) => l + " на " + c + " " + pluralRU(c, "ядро", "ядра", "ядер"), mem: (u, t) => "память " + u + " из " + t, maint: "Обслуживание", maintNow: "идёт: ", maintPlanned: "назначено: ",
       fpDefault: "chrome — по умолчанию",
       byIP: "По IP", countryAuto: "Пусто — панель узнает по IP сама",
@@ -5262,6 +5271,8 @@ const TEXTS = {
       maintFrom: "Maintenance from", maintUntil: "Maintenance until (empty — none)",
       maintEnd: "End maintenance", hoster: "Hoster this month",
       standbyFor: "Standby for", standbyNone: "— a regular node —",
+      probe: "Reaching the exit from Russia", probeVia: (name) => "From Russia via “" + name + "”",
+      probeOK: (ms, ago) => "reachable, " + ms + " ms · " + ago, probeFail: (n, ago) => "unreachable " + n + " times in a row · " + ago,
       load: "Load", loadText: (l, c) => l + " on " + c + (c === 1 ? " core" : " cores"), mem: (u, t) => "memory " + u + " of " + t, maint: "Maintenance", maintNow: "in progress: ", maintPlanned: "scheduled: ",
       fpDefault: "chrome — default",
       byIP: "By IP", countryAuto: "Empty — the panel finds it by IP",

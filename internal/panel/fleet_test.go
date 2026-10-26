@@ -98,3 +98,39 @@ func TestNodeLoadReachesThePanel(t *testing.T) {
 		t.Fatalf("нагрузка: %+v", out.Nodes)
 	}
 }
+
+// Вход сообщает о своём выходе; неудачи считаются подряд, а успех их
+// обнуляет — одна моргнувшая сеть не превращается в «заблокирован».
+func TestEntryProbeFailuresCountInARow(t *testing.T) {
+	h := newHarness(t)
+	entry := h.createNode("ru-entry")
+	send := func(ok bool) {
+		h.do(http.MethodPost, "/api/v1/node/usage", entry.Token, map[string]any{
+			"usage": map[string]any{}, "version": "v0.13.0", "probe": map[string]any{"ok": ok, "tcp_ms": 40},
+		}, nil)
+	}
+	probe := func() (bool, int) {
+		var out struct {
+			Nodes []struct {
+				Probe *struct {
+					OK    bool `json:"ok"`
+					Fails int  `json:"fails"`
+				} `json:"probe"`
+			} `json:"nodes"`
+		}
+		h.do(http.MethodGet, "/api/v1/nodes", adminToken, nil, &out)
+		if out.Nodes[0].Probe == nil {
+			t.Fatal("проверки нет")
+		}
+		return out.Nodes[0].Probe.OK, out.Nodes[0].Probe.Fails
+	}
+	send(false)
+	send(false)
+	if ok, fails := probe(); ok || fails != 2 {
+		t.Fatalf("после двух неудач: ok=%v, подряд %d", ok, fails)
+	}
+	send(true)
+	if ok, fails := probe(); !ok || fails != 0 {
+		t.Fatalf("после успеха: ok=%v, подряд %d", ok, fails)
+	}
+}

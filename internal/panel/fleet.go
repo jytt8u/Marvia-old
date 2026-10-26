@@ -197,3 +197,34 @@ func (a *API) KeepRolling(ctx context.Context) {
 		}
 	}
 }
+
+// NodeProbe — что вход каскада узнал о своём выходе: дошёл ли по TCP и за
+// сколько, и сколько раз подряд не дошёл (internal/nodesync/probe.go).
+type NodeProbe struct {
+	OK    bool      `json:"ok"`
+	TCPMS int64     `json:"tcp_ms"`
+	Fails int       `json:"fails"`
+	At    time.Time `json:"at"`
+}
+
+// probeReport — проверка в отчёте входа.
+type probeReport struct {
+	OK    bool  `json:"ok"`
+	TCPMS int64 `json:"tcp_ms"`
+}
+
+// ReportProbe запоминает проверку и считает неудачи подряд: одна неудача —
+// сеть моргнула, две подряд — уже повод сказать продавцу.
+func (s *Store) ReportProbe(ctx context.Context, entryID int64, p *probeReport, now time.Time) error {
+	if p == nil {
+		return nil
+	}
+	fails := `0`
+	if !p.OK {
+		fails = `probe_fails + 1`
+	}
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE nodes SET probe_ok = ?, probe_ms = ?, probe_at = ?, probe_fails = `+fails+` WHERE id = ?`,
+		boolInt(p.OK), p.TCPMS, format(now.UTC()), entryID)
+	return err
+}

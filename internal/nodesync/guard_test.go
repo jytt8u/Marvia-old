@@ -113,3 +113,29 @@ func TestMeminfoIsReadInBytes(t *testing.T) {
 		t.Fatalf("память: всего %d, свободно %d", total, avail)
 	}
 }
+
+// Вход видит, дошёл ли он до выхода: открытый порт — да и за сколько,
+// закрытый — нет. Сама проверка — один TCP-стук, без данных.
+func TestEntrySeesWhetherItsExitIsReachable(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	if p := probeTCP(context.Background(), ln.Addr().String()); !p.OK {
+		t.Fatal("открытый выход не виден")
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+	if p := probeTCP(context.Background(), addr); p.OK {
+		t.Fatal("закрытый выход виден")
+	}
+}

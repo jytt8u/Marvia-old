@@ -211,6 +211,22 @@ func (a *Alerts) checkNodes(ctx context.Context, cfg AlertSettings) {
 			a.say(ctx, cfg, "Нода «"+n.Name+"» снова тянет нормально.")
 		}
 
+		// Выход не виден из страны покупателей: его вход дважды подряд не
+		// достучался по TCP. Скорее всего, адрес выхода заблокировали.
+		if n.ExitID != 0 && n.Probe != nil {
+			ruKey := fmt.Sprintf("node-ru-%d", n.ID)
+			active[ruKey] = struct{}{}
+			blocked := n.Probe.Fails >= 2
+			switch {
+			case blocked && !a.already(ruKey):
+				a.mark(ruKey, true)
+				a.say(ctx, cfg, "Вход «"+n.Name+"» не достучался до своего выхода дважды подряд: адрес выхода, похоже, заблокирован. Смени выход или его адрес.")
+			case !blocked && n.Probe.OK && a.already(ruKey):
+				a.mark(ruKey, false)
+				a.say(ctx, cfg, "Вход «"+n.Name+"» снова достаёт до выхода.")
+			}
+		}
+
 		// Лимит хостера — один раз за период, когда израсходовано 90%:
 		// сверх лимита хостер режет скорость или выставляет счёт, и продавцу
 		// нужно время перевести людей на другие ноды.
@@ -232,7 +248,7 @@ func (a *Alerts) forgetMissingNodeAlerts(active map[string]struct{}) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for key := range a.told {
-		if !strings.HasPrefix(key, "node-silent-") && !strings.HasPrefix(key, "node-slow-") && !strings.HasPrefix(key, "node-quota-") {
+		if !strings.HasPrefix(key, "node-silent-") && !strings.HasPrefix(key, "node-slow-") && !strings.HasPrefix(key, "node-quota-") && !strings.HasPrefix(key, "node-ru-") {
 			continue
 		}
 		if _, ok := active[key]; !ok {

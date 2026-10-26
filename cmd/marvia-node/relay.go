@@ -45,6 +45,10 @@ const (
 
 // runRelay — нода в режиме входа: синхронизируется с панелью, как обычная,
 // но вместо протокола перекладывает соединения на выход.
+// relayProbeEvery — как часто вход проверяет свой выход. Пять минут: блокировку
+// продавец узнаёт быстрее покупателей, а лишнего стука в выход нет.
+const relayProbeEvery = 5 * time.Minute
+
 func runRelay(opts serverOptions) error {
 	if opts.panelURL == "" {
 		return errors.New("вход каскада работает только с панелью: укажи -panel")
@@ -60,6 +64,9 @@ func runRelay(opts serverOptions) error {
 		return err
 	}
 	go panel.Run(ctx, registry, panelSyncInterval, panelEvents())
+	// Вход стоит в сети покупателей и первым видит, что выход заблокирован;
+	// см. internal/nodesync/probe.go.
+	go panel.ProbeExit(ctx, relayProbeEvery)
 
 	ln, err := listenTCP(opts.listenAddr)
 	if err != nil {

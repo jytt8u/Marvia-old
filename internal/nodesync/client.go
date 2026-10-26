@@ -67,6 +67,9 @@ type Client struct {
 
 	// guards — приёмы под пределами из панели; см. guard.go.
 	guards guards
+
+	// probe — проверка выхода у входа каскада; см. probe.go.
+	probe probeState
 }
 
 // buildRetry — через сколько снова сообщать сборку панели, которая её не
@@ -220,6 +223,9 @@ func (c *Client) ReportUsage(ctx context.Context, report map[string]users.Usage,
 			body["guard"] = s
 		}
 		body["sys"] = readSysStat()
+		if p := c.lastProbe(); p != nil {
+			body["probe"] = p
+		}
 	}
 	err := c.postUsage(ctx, body)
 	var old *oldPanelError
@@ -230,6 +236,7 @@ func (c *Client) ReportUsage(ctx context.Context, report map[string]users.Usage,
 		delete(body, "arch")
 		delete(body, "guard")
 		delete(body, "sys")
+		delete(body, "probe")
 		err = c.postUsage(ctx, body)
 	}
 	return err

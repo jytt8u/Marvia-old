@@ -946,6 +946,9 @@ func (a *API) nodeUsage(w http.ResponseWriter, r *http.Request, n Node) {
 
 		// Sys — нагрузка машины ноды (fleet.go).
 		Sys NodeSys `json:"sys"`
+
+		// Probe — у входа каскада: проверка своего выхода (fleet.go).
+		Probe *probeReport `json:"probe"`
 	}
 	if !decodeFromNode(w, r, &body) {
 		return
@@ -965,6 +968,9 @@ func (a *API) nodeUsage(w http.ResponseWriter, r *http.Request, n Node) {
 		if _, err := a.store.RollNodeUpgrades(r.Context(), time.Now()); err != nil {
 			log.Printf("очередь обновления нод: %v", err)
 		}
+	}
+	if err := a.store.ReportProbe(r.Context(), n.ID, body.Probe, time.Now()); err != nil {
+		log.Printf("проверка выхода от ноды %d не сохранилась: %v", n.ID, err)
 	}
 	if err := a.store.ReportNodeSys(r.Context(), n.ID, body.Sys, time.Now()); err != nil {
 		log.Printf("нагрузка ноды %d не сохранилась: %v", n.ID, err)

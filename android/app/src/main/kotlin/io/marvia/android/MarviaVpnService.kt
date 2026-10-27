@@ -351,12 +351,17 @@ class MarviaVpnService : VpnService() {
         while (scope.isActive && started.running()) {
             // Экран погашен — смотреть на скорость некому. Интервал можно
             // настроить: он меняет только счётчики и уведомление, не туннель.
-            val seconds = if (power?.isInteractive != false) settings.liveRefreshSeconds else settings.idleRefreshSeconds
+            // Системное энергосбережение замедляет опрос до профиля «Батарея»
+            // (MonitoringProfiles.pace).
+            val (seconds, pingEvery) = MonitoringProfiles.pace(
+                settings.liveRefreshSeconds, settings.idleRefreshSeconds, settings.pingIntervalSeconds,
+                interactive = power?.isInteractive != false,
+                saver = power?.isPowerSaveMode == true,
+            )
             delay(seconds * 1000L)
 
             // Отклик мерим независимо от опроса счётчиков: если человек
             // снизил частоту обновления ради батареи, проверка не учащается.
-            val pingEvery = settings.pingIntervalSeconds
             val nowPing = android.os.SystemClock.elapsedRealtime()
             if (pingEvery > 0 && (lastPingAt == 0L || nowPing - lastPingAt >= pingEvery * 1000L)) {
                 started.ping()

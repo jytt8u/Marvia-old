@@ -183,6 +183,9 @@
     <string name="servers_sub_added">Подписка добавлена</string>
     <string name="servers_sub_bad">Такую ссылку клиент не понимает</string>
     <string name="servers_sub_remove">Убрать</string>
+    <string name="servers_sub_qr">Перенести на другой телефон</string>
+    <string name="servers_qr_title">Ключ QR-кодом</string>
+    <string name="servers_qr_body">На новом телефоне: «Добавить ключ» → «Камера». Кто отсканирует этот код, тот пользуется вашим доступом — не показывайте его чужим.</string>
     <string name="servers_sub_remove_ask">Убрать подписку «%1$s»?</string>
     <string name="servers_manual">Выбрать вручную</string>
     <string name="servers_empty">Страны видны изнутри туннеля.</string>

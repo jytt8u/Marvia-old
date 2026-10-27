@@ -7,6 +7,7 @@ import android.net.Uri
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
+import com.google.zxing.EncodeHintType
 import com.google.zxing.NotFoundException
 import com.google.zxing.RGBLuminanceSource
 import com.google.zxing.LuminanceSource
@@ -15,6 +16,8 @@ import com.google.zxing.ReaderException
 import com.google.zxing.common.GlobalHistogramBinarizer
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeReader
+import com.google.zxing.qrcode.QRCodeWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import java.nio.ByteBuffer
 
 /**
@@ -60,6 +63,27 @@ object QrImport {
         bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
         return decode(bitmap.width, bitmap.height, pixels)
     }
+
+    /**
+     * encode рисует ключ QR-кодом — для переезда на новый телефон: старый
+     * показывает, новый сканирует камерой «Добавить ключ». Пиксели ARGB
+     * квадратом side×side, с белым полем вокруг: без поля сканеры теряют
+     * искатели на тёмной теме. Уровень коррекции M — ключ длинный, и код
+     * с H на экране телефона вышел бы слишком мелким.
+     */
+    fun encode(text: String, side: Int): IntArray {
+        // UTF-8: в ключе бывает имя по-русски, а по умолчанию ZXing пишет Latin-1.
+        val hints = mapOf(
+            EncodeHintType.CHARACTER_SET to "UTF-8",
+            EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
+            EncodeHintType.MARGIN to 4,
+        )
+        val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, side, side, hints)
+        return IntArray(side * side) { i -> if (matrix.get(i % side, i / side)) BLACK else WHITE }
+    }
+
+    private const val BLACK = 0xFF000000.toInt()
+    private const val WHITE = 0xFFFFFFFF.toInt()
 
     /**
      * Распознаёт QR-код в пикселях ARGB. Отдельно от Bitmap, чтобы проверять

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="key_camera">Камера</string>
-    <string name="key_camera_description">Считать ключ с QR-кода камерой</string>
-    <string name="camera_hint">Наведите камеру на QR-код ключа</string>
-    <string name="camera_denied">доступ к камере не разрешён — ключ можно вставить или выбрать картинку QR-кода</string>
-    <string name="camera_settings">Разрешить в настройках</string>
-    <string name="camera_unavailable">камера недоступна — попробуйте выбрать картинку QR-кода</string>
-    <string name="camera_close">Закрыть</string>
+    <string name="key_camera">Camera</string>
+    <string name="key_camera_description">Read the key from a QR code with the camera</string>
+    <string name="camera_hint">Point the camera at the key\'s QR code</string>
+    <string name="camera_denied">camera access is not allowed — you can paste the key or pick a QR picture</string>
+    <string name="camera_settings">Allow in settings</string>
+    <string name="camera_unavailable">camera unavailable — try picking a QR picture</string>
+    <string name="camera_close">Close</string>
 </resources>

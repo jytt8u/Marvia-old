@@ -203,6 +203,9 @@
     <string name="servers_sub_added">Subscription added</string>
     <string name="servers_sub_bad">The client does not understand this link</string>
     <string name="servers_sub_remove">Remove</string>
+    <string name="servers_sub_qr">Move to another phone</string>
+    <string name="servers_qr_title">Key as a QR code</string>
+    <string name="servers_qr_body">On the new phone: Add key → Camera. Whoever scans this code uses your access, so keep it away from strangers.</string>
     <string name="servers_sub_remove_ask">Remove the subscription %1$s?</string>
     <string name="servers_manual">Pick by hand</string>
     <string name="servers_empty">Countries are visible from inside the tunnel.</string>

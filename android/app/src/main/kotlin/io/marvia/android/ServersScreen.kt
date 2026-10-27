@@ -245,16 +245,42 @@ class ServersScreen(
             .show()
     }
 
-    /** more — действия с подпиской: сделать рабочей, убрать. */
+    /** more — действия с подпиской: сделать рабочей, перенести, убрать. */
     private fun more(p: Provider) {
         val active = p.sub.link == store.accountLink
-        val items = buildList {
-            if (!active) add(host.getString(R.string.servers_use))
-            add(host.getString(R.string.servers_sub_remove))
+        val actions = buildList<Pair<String, () -> Unit>> {
+            if (!active) add(host.getString(R.string.servers_use) to { use(p.sub) })
+            add(host.getString(R.string.servers_sub_qr) to { showQr(p.sub) })
+            add(host.getString(R.string.servers_sub_remove) to { forget(p.sub) })
         }
-        ChoiceSheet.show(host, theme(), p.sub.name, items) { which ->
-            if (!active && which == 0) use(p.sub) else forget(p.sub)
+        ChoiceSheet.show(host, theme(), p.sub.name, actions.map { it.first }) { which -> actions[which].second() }
+    }
+
+    /**
+     * showQr показывает ключ QR-кодом — переезд на новый телефон без
+     * пересылки ключа самому себе в чат, где он остался бы навсегда.
+     *
+     * В ключе личный ключ покупателя: кто отсканирует, тот ходит по его
+     * доступу. Поэтому окно говорит об этом прямо и запрещает снимок
+     * экрана (FLAG_SECURE) — скриншот QR и есть тот самый ключ в галерее.
+     */
+    private fun showQr(sub: Store.Subscription) {
+        val side = (240 * host.resources.displayMetrics.density).toInt()
+        val pixels = runCatching { QrImport.encode(sub.link, side) }.getOrNull() ?: return
+        val image = android.widget.ImageView(host).apply {
+            setImageBitmap(android.graphics.Bitmap.createBitmap(pixels, side, side, android.graphics.Bitmap.Config.ARGB_8888))
+            adjustViewBounds = true
+            val pad = (16 * host.resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, 0)
         }
+        val dialog = ThemedDialogs.builder(host, theme())
+            .setTitle(R.string.servers_qr_title)
+            .setMessage(R.string.servers_qr_body)
+            .setView(image)
+            .setPositiveButton(android.R.string.ok, null)
+            .create()
+        dialog.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        dialog.show()
     }
 
     // ----------------------------------------------------------- данные

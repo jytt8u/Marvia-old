@@ -52,6 +52,14 @@ class QrImportTest {
         assertEquals(link, QrImport.decode(w, h, px))
     }
 
+    /** Переезд на новый телефон: показанный код читается тем же сканером. */
+    @Test
+    fun shownKeyIsScannedBackExactly() {
+        val key = "marvia://k3j9x2mq8w1z4v7pQwErTy@panel.example.com/sub/AbCdEf0123456789#Мой доступ"
+        val side = 600
+        assertEquals(key, QrImport.decode(side, side, QrImport.encode(key, side)))
+    }
+
     @Test
     fun pictureWithoutQrGivesNothing() {
         val px = IntArray(400 * 300) { if (it % 7 == 0) 0xFF000000.toInt() else 0xFFFFFFFF.toInt() }

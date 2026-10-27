@@ -644,6 +644,8 @@
     <string name="seller_remind_expiry">Access ends in %1$s. Renew in advance so nothing stops.</string>
     <string name="seller_remind_traffic">%1$d%% of traffic left. Renew in advance so nothing stops.</string>
     <string name="seller_remind_forecast">At your current usage, traffic will last about %1$s. Renew in advance so nothing stops.</string>
+    <string name="shortcut_connect">Connect</string>
+    <string name="shortcut_disconnect">Disconnect</string>
     <string name="seller_channel">Access reminders</string>
     <string name="seller_channel_desc">When access is about to end, traffic runs low or the seller posts an announcement</string>
     <string name="trouble_network_changing">network changed — restoring the connection</string>

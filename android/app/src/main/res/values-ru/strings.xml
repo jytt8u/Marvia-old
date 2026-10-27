@@ -621,6 +621,8 @@
     <string name="seller_remind_expiry">Доступ кончится через %1$s. Продлите заранее, чтобы ничего не встало.</string>
     <string name="seller_remind_traffic">Осталось %1$d%% трафика. Продлите заранее, чтобы ничего не встало.</string>
     <string name="seller_remind_forecast">При нынешнем расходе трафика хватит примерно на %1$s. Продлите заранее, чтобы ничего не встало.</string>
+    <string name="shortcut_connect">Подключить</string>
+    <string name="shortcut_disconnect">Отключить</string>
     <string name="seller_channel">Напоминания о доступе</string>
     <string name="seller_channel_desc">Когда подходит срок, кончается трафик или у продавца новое объявление</string>
     <string name="trouble_network_changing">сеть изменилась — восстанавливаем соединение</string>

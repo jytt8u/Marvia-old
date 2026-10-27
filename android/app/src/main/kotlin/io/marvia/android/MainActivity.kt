@@ -218,6 +218,7 @@ class MainActivity : AppCompatActivity() {
         show(firstScreen())
         refreshRoutes()
         acceptLinkFrom(intent)
+        followShortcut(intent)
     }
 
     override fun onResume() {
@@ -983,6 +984,27 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         acceptLinkFrom(intent)
+        followShortcut(intent)
+    }
+
+    /**
+     * followShortcut выполняет ярлык с долгого нажатия на значок
+     * (res/xml/shortcuts.xml). «Подключить» при уже поднятом туннеле и
+     * «Отключить» при опущенном ничего не делают: ярлык — желаемое состояние,
+     * а не переключатель, и второе нажатие не должно его перевернуть.
+     */
+    private fun followShortcut(intent: Intent) {
+        val want = when (intent.action) {
+            ACTION_CONNECT -> true
+            ACTION_DISCONNECT -> false
+            else -> return
+        }
+        // Действие из намерения убираем, как и ссылку: иначе смена темы
+        // пересоздаст окно и выполнит ярлык второй раз.
+        intent.action = Intent.ACTION_MAIN
+        val state = MarviaState.state.value
+        val up = state is TunnelState.On || state is TunnelState.Connecting
+        if (want != up) toggle()
     }
 
     // ------------------------------------------------------------- прочее
@@ -1129,3 +1151,7 @@ class MainActivity : AppCompatActivity() {
 
 /** Сколько ждать, пока прежняя служба VPN разрушится, прежде чем поднять новую. */
 private const val RECONNECT_WAIT_MS = 10_000L
+
+// Действия ярлыков на значке; те же строки — в res/xml/shortcuts.xml.
+private const val ACTION_CONNECT = "io.marvia.android.CONNECT"
+private const val ACTION_DISCONNECT = "io.marvia.android.DISCONNECT"

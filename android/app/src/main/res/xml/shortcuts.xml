@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Долгое нажатие на значок: подключить или отключить, не листая экраны.
+    Ярлык открывает то же окно, что и значок, — только оно умеет спросить
+    у системы разрешение на VPN (MainActivity.followShortcut).
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="connect"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_connect">
+        <intent
+            android:action="io.marvia.android.CONNECT"
+            android:targetPackage="io.marvia.android"
+            android:targetClass="io.marvia.android.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="disconnect"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_disconnect">
+        <intent
+            android:action="io.marvia.android.DISCONNECT"
+            android:targetPackage="io.marvia.android"
+            android:targetClass="io.marvia.android.MainActivity" />
+    </shortcut>
+</shortcuts>

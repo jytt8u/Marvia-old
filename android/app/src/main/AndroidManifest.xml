@@ -6,6 +6,13 @@
     <!-- Галерея и вставка ключа доступны и на устройствах без камеры. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <!--
+        Android TV: тот же туннель на телевизоре, где Netflix и YouTube.
+        Сенсорного экрана там нет — управление пультом, и всё приложение
+        проходится стрелками. Не обязательны: на телефоне ничего не меняется.
+    -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <!-- Видеть, есть ли сеть кроме туннеля: без неё уведомление писало «Подключено» без сети. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -41,6 +48,7 @@
     <application
         android:name=".MarviaApp"
         android:allowBackup="false"
+        android:banner="@drawable/tv_banner"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
@@ -56,6 +64,7 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
             <meta-data
                 android:name="android.app.shortcuts"

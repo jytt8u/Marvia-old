@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Баннер Android TV — 320×180: телевизор показывает в ряду приложений его,
+    а не круглую иконку. Тот же фон, что у иконки, и надпись MARVIA по центру.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_launcher_background" android:width="320dp" android:height="180dp" />
+    <item
+        android:drawable="@drawable/ic_wordmark"
+        android:width="216dp"
+        android:height="48dp"
+        android:gravity="center" />
+</layer-list>

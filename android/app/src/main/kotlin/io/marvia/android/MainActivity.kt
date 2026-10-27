@@ -157,6 +157,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(ui.root)
 
         applyInsets()
+        watchFocus()
         wireNav()
         wireConnect()
         wireKey()
@@ -1005,6 +1006,39 @@ class MainActivity : AppCompatActivity() {
         val state = MarviaState.state.value
         val up = state is TunnelState.On || state is TunnelState.Connecting
         if (want != up) toggle()
+    }
+
+    /**
+     * watchFocus обводит кнопку, на которой стоит фокус, — но только когда
+     * управляют стрелками: пультом телевизора или клавиатурой. Пальцем
+     * фокус не нужен, и на телефоне ничего не меняется.
+     *
+     * Без обводки на Android TV приложение проходилось стрелками, но не
+     * было видно, где ты: подсветку нажатия рисуют только для пальца.
+     * Одна обводка на всё окно, а не по селектору на каждую кнопку: кнопок
+     * много, и новая без селектора молча стала бы невидимой для пульта.
+     */
+    private fun watchFocus() {
+        val tree = ui.root.viewTreeObserver
+        tree.addOnGlobalFocusChangeListener { _, now -> ring(now) }
+        tree.addOnTouchModeChangeListener { touch -> ring(if (touch) null else currentFocus) }
+    }
+
+    private var ringed: View? = null
+    private var ringedForeground: android.graphics.drawable.Drawable? = null
+
+    private fun ring(view: View?) {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) return
+        ringed?.foreground = ringedForeground
+        ringed = null
+        if (view == null || view.isInTouchMode) return
+        ringed = view
+        ringedForeground = view.foreground
+        val density = resources.displayMetrics.density
+        view.foreground = android.graphics.drawable.GradientDrawable().apply {
+            setStroke((3 * density).toInt(), theme.acc)
+            cornerRadius = 18 * density
+        }
     }
 
     // ------------------------------------------------------------- прочее

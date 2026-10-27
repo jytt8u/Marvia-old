@@ -58,3 +58,30 @@ func TestScreenWithoutSellerSettingsHasNoSellerFields(t *testing.T) {
 		}
 	}
 }
+
+// TestForecastGivesWayToTheSellersOwnReminder: прогноз — запасной повод.
+// Если срок и так на исходе, человек получает одно напоминание о сроке,
+// а не два подряд.
+func TestForecastGivesWayToTheSellersOwnReminder(t *testing.T) {
+	forecast := client.Reminder{Kind: client.ReminderForecast, Value: 2, Key: "forecast:1:x"}
+	read := func(sub client.Subscription) string {
+		raw, err := viewJSONWith(sub, time.Now(), false, forecast)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var view SubscriptionView
+		if err := json.Unmarshal([]byte(raw), &view); err != nil {
+			t.Fatal(err)
+		}
+		return view.Remind
+	}
+	quiet := client.Subscription{Nodes: []client.Node{{ID: 1}}}
+	if got := read(quiet); got != client.ReminderForecast {
+		t.Errorf("своих поводов нет, а напоминание %q — прогноз потерялся", got)
+	}
+	ending := quiet
+	ending.ExpiresAt = time.Now().Add(20 * time.Hour).UTC().Format(time.RFC3339)
+	if got := read(ending); got != "expiry" {
+		t.Errorf("срок на исходе, а напоминание %q", got)
+	}
+}

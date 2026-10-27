@@ -387,6 +387,7 @@ class ServersScreen(
             host, store, p.sub.name, p.sub.link,
             o.optString("remind", ""), o.optLong("remind_value", 0), o.optString("remind_key", ""), p.renew,
         )
+        SellerChannel.announce(host, store, p.sub.name, p.sub.link, p.announce)
     }
 
     private fun parseRows(p: Provider, json: String): List<NodeRow> = NodeRow.parse(json) { id, name, endpoint ->

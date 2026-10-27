@@ -96,3 +96,26 @@ func TestLastDayOutranksTrafficAndTrafficOutranksThreeDays(t *testing.T) {
 		t.Fatalf("в последний день при 5%% трафика: %+v", r)
 	}
 }
+
+// «При вашем расходе хватит примерно на 2 дня» — по двум замерам в одном
+// периоде; после продления (другой срок) и при всплеске за минуты прогноза нет.
+func TestForecastSaysWhenTrafficRunsOut(t *testing.T) {
+	const gb = int64(1) << 30
+	now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	cur := client.Subscription{TrafficLimit: 100 * gb, Used: 96 * gb, ExpiresAt: "2026-11-30T00:00:00Z"}
+	// За сутки ушло 2 ГБ, осталось 4 — хватит на 2 дня.
+	r := client.Forecast(6*gb, 100*gb, cur.ExpiresAt, now.Add(-24*time.Hour), cur, now)
+	if r.Kind != client.ReminderForecast || r.Value != 2 {
+		t.Fatalf("прогноз: %+v", r)
+	}
+	if r := client.Forecast(6*gb, 100*gb, "2026-10-30T00:00:00Z", now.Add(-24*time.Hour), cur, now); r.Kind != "" {
+		t.Fatalf("прогноз через продление: %+v", r)
+	}
+	if r := client.Forecast(6*gb, 100*gb, cur.ExpiresAt, now.Add(-10*time.Minute), cur, now); r.Kind != "" {
+		t.Fatalf("прогноз по всплеску за минуты: %+v", r)
+	}
+	// Медленный расход — до конца далеко, напоминать незачем.
+	if r := client.Forecast(4*gb+gb/10, 100*gb, cur.ExpiresAt, now.Add(-24*time.Hour), cur, now); r.Kind != "" {
+		t.Fatalf("прогноз при медленном расходе: %+v", r)
+	}
+}

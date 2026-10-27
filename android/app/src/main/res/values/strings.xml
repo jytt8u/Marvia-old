@@ -643,8 +643,9 @@
     <string name="seller_no_app">No app on this phone can open the link</string>
     <string name="seller_remind_expiry">Access ends in %1$s. Renew in advance so nothing stops.</string>
     <string name="seller_remind_traffic">%1$d%% of traffic left. Renew in advance so nothing stops.</string>
+    <string name="seller_remind_forecast">At your current usage, traffic will last about %1$s. Renew in advance so nothing stops.</string>
     <string name="seller_channel">Access reminders</string>
-    <string name="seller_channel_desc">When access is about to end or traffic runs low</string>
+    <string name="seller_channel_desc">When access is about to end, traffic runs low or the seller posts an announcement</string>
     <string name="trouble_network_changing">network changed — restoring the connection</string>
     <string name="trouble_network_offline">no underlying network — waiting for Wi-Fi or mobile data</string>
     <!-- Главная: «где вы», подписка и консоль (см. HomeBlocks). -->

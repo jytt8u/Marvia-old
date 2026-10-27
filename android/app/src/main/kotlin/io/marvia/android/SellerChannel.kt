@@ -72,8 +72,33 @@ object SellerChannel {
                 context.resources.getQuantityString(R.plurals.days_left, value.toInt(), value.toInt()),
             )
             "traffic" -> context.getString(R.string.seller_remind_traffic, value.toInt())
+            // Прогноз ядра: при нынешнем расходе трафик кончится раньше срока.
+            "forecast" -> context.getString(
+                R.string.seller_remind_forecast,
+                context.resources.getQuantityString(R.plurals.days_left, value.toInt(), value.toInt()),
+            )
             else -> return
         }
+        show(context, store, subName, link, seen, key, text, renewUrl)
+    }
+
+    /**
+     * announce сообщает объявление продавца — «работы ночью», «новая нода» —
+     * уведомлением, а не только строкой на экране серверов: туда заходят,
+     * когда уже что-то не работает. Ключ — сам текст: то же объявление
+     * второй раз не приходит, новое — приходит.
+     */
+    @Synchronized
+    fun announce(context: Context, store: Store, subName: String, link: String, text: String) {
+        if (text.isBlank()) return
+        val seen = LinkedHashSet(store.reminded(link))
+        val key = "announce:" + Integer.toHexString(text.hashCode())
+        if (!firstTime(seen, key)) return
+        // Нажатие ведёт в приложение: у объявления нет «продлить».
+        show(context, store, subName, link, seen, key, text, "")
+    }
+
+    private fun show(context: Context, store: Store, subName: String, link: String, seen: Set<String>, key: String, text: String, renewUrl: String) {
         // Без разрешения на уведомления не показываем и ключ не тратим:
         // разрешат позже — напоминание придёт при следующем обновлении.
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -104,6 +129,9 @@ object SellerChannel {
             .setContentIntent(tap)
             .setAutoCancel(true)
             .build()
-        manager.notify(CHANNEL.hashCode() xor link.hashCode(), n)
+        // Объявление — отдельным уведомлением: иначе оно затирало бы
+        // напоминание о сроке той же подписки.
+        val slot = if (key.startsWith("announce:")) 1 else 0
+        manager.notify((CHANNEL.hashCode() xor link.hashCode()) + slot, n)
     }
 }

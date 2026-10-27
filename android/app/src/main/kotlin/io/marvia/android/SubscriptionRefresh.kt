@@ -71,6 +71,7 @@ class SubscriptionRefreshWorker(context: Context, params: WorkerParameters) : Co
                     view.optString("remind"), view.optLong("remind_value"),
                     view.optString("remind_key"), view.optString("renew_url"),
                 )
+                SellerChannel.announce(applicationContext, store, sub.name, sub.link, view.optString("announce"))
                 // При недоступной панели ядро возвращает старый кэш, включая
                 // рассчитанное на сегодня напоминание. Это полезный результат,
                 // но список всё равно нужно обновить после восстановления сети.

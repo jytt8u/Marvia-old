@@ -99,3 +99,45 @@ func (s Subscription) trafficReminder() Reminder {
 		Key:   ReminderTraffic + ":" + strconv.FormatInt(s.TrafficLimit, 10) + ":" + s.ExpiresAt,
 	}
 }
+
+// ReminderForecast — трафик кончится раньше срока; Value — примерно через
+// сколько дней при нынешнем расходе.
+const ReminderForecast = "forecast"
+
+// forecastDays — за сколько дней до конца трафика предупреждать. Трое суток —
+// как и для срока: успеть оплатить в выходные.
+const forecastDays = 3
+
+// Forecast — прогноз по двум замерам остатка: был prevLeft в prevAt, стал
+// cur в now. «Осталось 10%» человеку мало что говорит, а «при вашем
+// расходе хватит примерно на 2 дня» — говорит.
+//
+// Прогноз только внутри одного периода — лимит и срок те же, — и только
+// по промежутку от часа до недели: короче — случайный всплеск, длиннее —
+// расход давно другой. Ключ — лимит и срок: в одном периоде прогноз
+// показывают один раз.
+func Forecast(prevLeft int64, prevLimit int64, prevExpires string, prevAt time.Time, cur Subscription, now time.Time) Reminder {
+	left := cur.Remaining()
+	if cur.TrafficLimit <= 0 || left <= 0 || prevLimit != cur.TrafficLimit || prevExpires != cur.ExpiresAt {
+		return Reminder{}
+	}
+	spent, gap := prevLeft-left, now.Sub(prevAt)
+	if spent <= 0 || gap < time.Hour || gap > 7*24*time.Hour {
+		return Reminder{}
+	}
+	perDay := float64(spent) / gap.Hours() * 24
+	days := float64(left) / perDay
+	if days > forecastDays {
+		return Reminder{}
+	}
+	// Вверх: «через 0 дней» при живом трафике — неправда.
+	value := int64(days)
+	if float64(value) < days {
+		value++
+	}
+	return Reminder{
+		Kind:  ReminderForecast,
+		Value: value,
+		Key:   ReminderForecast + ":" + strconv.FormatInt(cur.TrafficLimit, 10) + ":" + cur.ExpiresAt,
+	}
+}

@@ -46,7 +46,8 @@ type SubscriptionView struct {
 	Announce   string `json:"announce,omitempty"`
 
 	// Remind — о чём напомнить: "expiry" (RemindValue — дней до конца) или
-	// "traffic" (RemindValue — процентов трафика осталось); пусто — не о
+	// "traffic" (RemindValue — процентов трафика осталось) или "forecast"
+	// (RemindValue — примерно дней, на сколько хватит трафика); пусто — не о
 	// чем. RemindKey приложение запоминает, когда показало, и тот же ключ
 	// второй раз не показывает. Подробности — client.Reminder.
 	Remind      string `json:"remind,omitempty"`
@@ -108,7 +109,14 @@ func subscription(accountLink, cacheDir string, refresh bool, httpClient *http.C
 		// Не сохранился кэш — не беда: в следующий раз сходим в панель снова.
 		_ = client.SaveCache(path, account.SubscriptionURL, sub)
 	}
-	return viewJSON(sub, time.Now(), false)
+	// Прогноз «хватит примерно на N дней» — по прошлому замеру из кэша
+	// (client.Forecast); напоминание срока или остатка его перекрывает.
+	var forecast client.Reminder
+	if !cached.FetchedAt.IsZero() {
+		prev := cached.Subscription
+		forecast = client.Forecast(prev.Remaining(), prev.TrafficLimit, prev.ExpiresAt, cached.FetchedAt, sub, time.Now())
+	}
+	return viewJSONWith(sub, time.Now(), false, forecast)
 }
 
 // MeasureNodes меряет ноды подписки без туннеля, настоящим подключением к
@@ -174,9 +182,18 @@ func MeasureNodes(accountLink, cacheDir, settings string) (string, error) {
 }
 
 func viewJSON(sub client.Subscription, fetched time.Time, stale bool) (string, error) {
+	return viewJSONWith(sub, fetched, stale, client.Reminder{})
+}
+
+// viewJSONWith — то же, с запасным напоминанием: его показывают, только
+// если своих поводов у подписки нет.
+func viewJSONWith(sub client.Subscription, fetched time.Time, stale bool, fallback client.Reminder) (string, error) {
 	// Напоминание считается на «сейчас», а не на момент, когда список
 	// пришёл: из кэша суточной давности «осталось 3 дня» было бы неправдой.
 	remind := sub.Reminder(time.Now())
+	if remind.Kind == "" {
+		remind = fallback
+	}
 	view := SubscriptionView{
 		Nodes:       make([]NodeView, 0, len(sub.Nodes)),
 		Limit:       sub.TrafficLimit,

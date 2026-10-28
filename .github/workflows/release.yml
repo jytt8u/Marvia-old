@@ -80,19 +80,10 @@ jobs:
           "$sdk" "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
+      # Тот же скрипт собирает ядро и для F-Droid (docs/fdroid.md).
       - name: Ядро для Android
         if: steps.key.outputs.signed == 'true'
-        run: |
-          go install golang.org/x/mobile/cmd/gomobile
-          go install golang.org/x/mobile/cmd/gobind
-          # -checklinkname=0 — Xray тянет github.com/wlynxg/anet, а тот на Android
-          # ссылается на внутренности net через go:linkname, что компоновщик с Go
-          # 1.23 без флага запрещает. Так советует сам anet; Xray для v2rayNG
-          # собирают так же. Функцию, которой он нужен, Marvia не вызывает.
-          mkdir -p android/app/libs
-          "$(go env GOPATH)/bin/gomobile" bind \
-            -target=android/arm64,android/arm -androidapi 24 -trimpath -ldflags="-s -w -checklinkname=0" \
-            -javapkg=io.marvia -o android/app/libs/marvia.aar ./mobile
+        run: sh scripts/android-core.sh
 
       # Код обновления лежит в android/version-code и растёт с каждым APK:
       # телефон ставит поверх только больший код, а из номера alpha его не

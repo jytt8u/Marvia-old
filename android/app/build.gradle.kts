@@ -49,8 +49,12 @@ val releaseKeys = Properties().apply {
 // Для возврата к номеру alpha после 1.x или повторных кандидатов задаём
 // MARVIA_VERSION_CODE отдельно: меньший versionName не должен мешать обновлению.
 // Без переменной — dev и код 1: сборка разработчика, обновлений не ждёт.
-val appVersion: String = System.getenv("MARVIA_VERSION")?.trim()?.removePrefix("v")?.takeIf { it.isNotEmpty() } ?: "dev"
-val explicitVersionCode = System.getenv("MARVIA_VERSION_CODE")?.let { raw ->
+//
+// То же можно передать свойствами Gradle -PmarviaVersion и
+// -PmarviaVersionCode: сборщик F-Droid задаёт их так (gradleprops), а
+// переменных окружения в его рецепте нет (docs/fdroid.md).
+val appVersion: String = (System.getenv("MARVIA_VERSION") ?: providers.gradleProperty("marviaVersion").orNull)?.trim()?.removePrefix("v")?.takeIf { it.isNotEmpty() } ?: "dev"
+val explicitVersionCode = (System.getenv("MARVIA_VERSION_CODE") ?: providers.gradleProperty("marviaVersionCode").orNull)?.let { raw ->
     requireNotNull(raw.toIntOrNull()?.takeIf { it in 1..2100000000 }) {
         "MARVIA_VERSION_CODE должен быть целым числом от 1 до 2100000000"
     }

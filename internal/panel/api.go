@@ -144,6 +144,8 @@ func (a *API) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/v1/alerts", a.admin(a.getAlerts))
 	mux.HandleFunc("GET /api/v1/guard", a.admin(a.getGuard))
+	mux.HandleFunc("GET /api/v1/status-page", a.admin(a.getStatusPage))
+	mux.HandleFunc("PUT /api/v1/status-page", a.admin(a.setStatusPage))
 	mux.HandleFunc("PUT /api/v1/guard", a.admin(a.setGuard))
 
 	// Обновления: только админ. Ключ бота обновлять серверы не должен —
@@ -193,6 +195,9 @@ func (a *API) Handler() http.Handler {
 	// Российские подсети для байпаса. По токену подписки: список не секрет, но
 	// и раздавать его всему интернету с домена продавца незачем.
 	mux.HandleFunc("GET /sub/{token}/bypass", a.bypassRoutes)
+
+	// Страница статуса нод — по случайному пути, без входа (status.go).
+	mux.HandleFunc("GET /status/{slug}", a.statusPublic)
 
 	// Подписка по пути прежней панели, если он был не /sub/. Все пути выше
 	// конкретнее этого шаблона и выигрывают у него сами.

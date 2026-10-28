@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="{{.Text.Language}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <!-- Обновление без скриптов: страницу держат открытой, пока ждут сервер. -->
+  <meta http-equiv="refresh" content="60">
+  <title>{{.Text.Title}} · Marvia</title>
+  <link rel="icon" href="data:,">
+  <!--
+    Страница открыта всем, у кого есть ссылка, поэтому без скриптов и без
+    внешних файлов — как страница покупателя (buyer.html), в тех же цветах.
+  -->
+  <style nonce="{{.Nonce}}">
+    :root { color-scheme: dark; --bg: #0c0e11; --glow: #2a2f36; --card: #17191d; --card2: #1f2226; --ink: #f1f4f7; --muted: #a9b0b8;
+      --line: #2c3036; --ok: #3ddc97; --warn: #ffb15c; --off: #ff6b7a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; color: var(--ink);
+      background: radial-gradient(120% 70% at 15% -10%, var(--glow), transparent 60%), var(--bg);
+      font: 16px/1.55 "Segoe UI Variable Text", "Segoe UI", -apple-system, "SF Pro Text", Roboto, system-ui, sans-serif; }
+    main { max-width: 640px; margin: auto; padding: 28px 20px 48px; }
+    .top { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; }
+    .top img { width: 34px; height: 34px; }
+    .word { font-weight: 800; letter-spacing: .32em; font-size: 14px; }
+    h1 { font-size: clamp(28px, 6vw, 38px); line-height: 1.12; letter-spacing: -.02em; margin: 14px 0 6px; }
+    h2 { font-size: 18px; margin: 0 0 10px; }
+    p { margin: 0 0 10px; }
+    .muted { color: var(--muted); }
+    section { margin-top: 14px; padding: 22px; border-radius: 22px; background: var(--card); border: 1px solid var(--line); }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 650;
+      background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+    .pill i, .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 10px currentColor; flex: none; }
+    .pill.down { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+    li:first-child { border-top: 0; padding-top: 0; }
+    li:last-child { padding-bottom: 0; }
+    .name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .state { font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
+    .up { color: var(--ok); }
+    .down { color: var(--off); }
+    .maint { color: var(--warn); }
+    .announcement p { overflow-wrap: anywhere; margin: 0; }
+    footer { margin-top: 22px; color: var(--muted); font-size: 13px; text-align: center; }
+    @media (max-width: 600px) {
+      main { padding: 20px 14px 36px; }
+      section { padding: 18px; border-radius: 18px; }
+    }
+    @media (prefers-color-scheme: light) {
+      :root { color-scheme: light; --bg: #f3f4f6; --glow: #ffffff; --card: #ffffff; --card2: #f7f8fa; --ink: #16181b; --muted: #5d636b;
+        --line: #e2e4e8; --ok: #138a59; --warn: #a35a00; --off: #c22f3f; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <img src="{{.Mark}}" width="34" height="34" alt="">
+    <span class="word">MARVIA</span>
+  </header>
+
+  <h1>{{.Text.Title}}</h1>
+  {{if .Nodes}}<div class="pill{{if not .AllUp}} down{{end}}"><i></i>{{if .AllUp}}{{.Text.AllUp}}{{else}}{{.Text.SomeDown}}{{end}}</div>{{end}}
+
+  {{if .Announce}}
+  <section class="announcement"><p>{{.Announce}}</p></section>
+  {{end}}
+
+  <section>
+    {{if .Nodes}}
+    <ul>
+      {{range .Nodes}}<li><span class="name">{{.Name}}</span><span class="state {{.State}}"><span class="dot"></span>{{.Label}}</span></li>
+      {{end}}
+    </ul>
+    {{else}}<p class="muted">{{.Text.Empty}}</p>{{end}}
+  </section>
+
+  <footer>{{.Text.Intro}}<br>{{.Text.Updated}}: {{.Updated}}</footer>
+</main>
+</body>
+</html>

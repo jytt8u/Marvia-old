@@ -1897,6 +1897,18 @@
                 <div class="btn btn-primary" onClick="{{ saveSeller }}">{{ d18.seller.save }}</div>
               </div>
 
+              <!-- Страница статуса нод: открытая ссылка для канала продавца (status.go). -->
+              <div class="field">
+                <label><input id="st-on" type="checkbox" onChange="{{ toggleStatusPage }}" /> {{ d18.seller.statusOn }}</label>
+                <sc-if value="{{ statusURL }}">
+                  <input id="st-link" type="text" readonly class="input mono" value="{{ statusURL }}" />
+                  <div class="actions">
+                    <button type="button" class="btn btn-secondary" onClick="{{ newStatusLink }}">{{ d18.seller.statusNew }}</button>
+                  </div>
+                </sc-if>
+                <div class="help">{{ d18.seller.statusNote }}</div>
+              </div>
+
               <div class="help card-foot">{{ d18.seller.where }}</div>
             </div>
           </div>
@@ -2413,6 +2425,11 @@ async function loadAlerts() {
   } catch (_) {
     state.seller = null;
   }
+  try {
+    state.statusPage = await api("/api/v1/status-page");
+  } catch (_) {
+    state.statusPage = null;
+  }
   render();
   fillAlerts();
 }
@@ -2448,6 +2465,7 @@ function fillAlerts() {
   document.getElementById("sl-support").value = sl.support_url || "";
   document.getElementById("sl-renew").value = sl.renew_url || "";
   document.getElementById("sl-announce").value = sl.announce || "";
+  document.getElementById("st-on").checked = !!state.statusPage?.enabled;
 }
 
 // Сама панель подтягивает данные только на разделах с данными. На настройках
@@ -4538,7 +4556,11 @@ const TEXTS = {
       announce: ["ОБЪЯВЛЕНИЕ", "Одна строка для всех, до 300 символов: работы, новости. Happ показывает первые 200."],
       save: "Сохранить",
       saved: "Сохранено",
-      where: "Уходит в подписку каждому покупателю. Happ, v2RayTun и Hiddify показывают кнопки и объявление по заголовкам подписки. В приложениях Marvia кнопок пока нет: данные уже доходят, экран — следующей версией.",
+      where: "Уходит в подписку каждому покупателю. Happ, v2RayTun и Hiddify показывают кнопки и объявление по заголовкам подписки, приложения Marvia — на карточке подписки и уведомлением.",
+      statusOn: "Открытая страница статуса нод",
+      statusNote: "Ссылка для канала: какие серверы работают, без адресов. Открывается без входа.",
+      statusNew: "Новая ссылка",
+      statusRenewed: "Старая ссылка больше не открывается",
     },
     look: {
       title: "Теперь — по-вашему.",
@@ -5111,7 +5133,11 @@ const TEXTS = {
       announce: ["ANNOUNCEMENT", "One line for everyone, up to 300 characters: maintenance, news. Happ shows the first 200."],
       save: "Save",
       saved: "Saved",
-      where: "Sent with every customer's subscription. Happ, v2RayTun and Hiddify show the buttons and the announcement from subscription headers. Marvia apps have no buttons yet: the data already arrives, the screen comes in a later version.",
+      where: "Sent with every customer's subscription. Happ, v2RayTun and Hiddify show the buttons and the announcement from subscription headers; Marvia apps show them on the subscription card and as a notification.",
+      statusOn: "Public node status page",
+      statusNote: "A link for your channel: which servers work, without addresses. Opens without signing in.",
+      statusNew: "New link",
+      statusRenewed: "The old link no longer opens",
     },
     look: {
       title: "Make it yours.",
@@ -6570,6 +6596,21 @@ function renderVals() {
       });
       fillAlerts();
       toast(d.seller.saved);
+    }),
+
+    statusURL: state.statusPage?.url || "",
+    toggleStatusPage: (e) => act(async () => {
+      state.statusPage = await api("/api/v1/status-page", "PUT", { enabled: e.target.checked });
+      render();
+      fillAlerts();
+      toast(L().seller.saved);
+    }),
+    // Новая ссылка отзывает старую: её могли переслать не туда.
+    newStatusLink: () => act(async () => {
+      state.statusPage = await api("/api/v1/status-page", "PUT", { enabled: true, new_link: true });
+      render();
+      fillAlerts();
+      toast(L().seller.statusRenewed);
     }),
 
     // Поиск нужен там, где список длинный и растёт. У нод и ключей их

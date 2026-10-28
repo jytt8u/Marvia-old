@@ -1,0 +1,50 @@
+# Страница проекта на GitHub Pages — site/index.html и снимки из docs/shots.
+#
+# Включает Pages владелец: Settings → Pages → Source: «GitHub Actions», затем
+# переменная репозитория PAGES_ENABLED = true. До этого выкладка пропускается,
+# а не падает: красный крестик на каждом коммите из-за невключённой настройки
+# приучил бы не смотреть на крестики вовсе.
+
+name: Страница проекта
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - site/**
+      - docs/shots/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Две выкладки подряд: побеждает последняя, недоделанную не прерываем.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Выложить
+    if: vars.PAGES_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Собрать страницу
+        run: |
+          mkdir -p out/shots
+          cp site/index.html out/
+          cp docs/shots/*.png docs/shots/*.svg out/shots/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+      - id: deploy
+        uses: actions/deploy-pages@v4

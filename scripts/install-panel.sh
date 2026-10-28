@@ -3,6 +3,7 @@
 # Установка панели Marvia на чистый сервер.
 #
 #   ./install-panel.sh --domain panel.example.com [--port 443] [--email ты@example.com]
+#   ./install-panel.sh            без ключей — спросит домен, почту и порт
 #
 # Бинарники берутся сами: скрипт определяет разрядность сервера, скачивает
 # архив, сверяет контрольную сумму и ставит. Компилятор не нужен — в этом весь
@@ -54,6 +55,70 @@ command -v systemctl >/dev/null 2>&1 || die 'на этой системе нет
 command -v curl >/dev/null 2>&1 || die 'нет curl. Поставь: apt-get install -y curl'
 command -v tar >/dev/null 2>&1 || die 'нет tar. Поставь: apt-get install -y tar'
 
+# ---------------------------------------------------------------- мастер
+#
+# Без --domain скрипт не падает, а спрашивает — по-русски и по одному
+# вопросу. Продавец, впервые взявший VPS, не знает, какие ключи писать,
+# и строка из инструкции с чужим доменом — ровно то, на чём он бросает.
+# Вопросы читаем из /dev/tty: при «curl … | sh» на stdin сам скрипт.
+# Нет терминала (запуск из автоматики) — прежнее поведение, ошибка.
+WIZARD=0
+if [ -z "$DOMAIN" ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+	WIZARD=1
+fi
+
+# ask ВОПРОС ПО_УМОЛЧАНИЮ — ответ в $REPLY; пустой ответ — по умолчанию.
+ask() {
+	if [ -n "$2" ]; then
+		printf '%s [%s]: ' "$1" "$2" >/dev/tty
+	else
+		printf '%s: ' "$1" >/dev/tty
+	fi
+	REPLY=''
+	IFS= read -r REPLY </dev/tty || REPLY=''
+	[ -n "$REPLY" ] || REPLY="$2"
+}
+
+# agree ВОПРОС — да или нет, по умолчанию нет.
+agree() {
+	ask "$1 (да/нет)" 'нет'
+	case "$REPLY" in
+	д|да|Да|ДА|y|Y|yes|Yes) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+if [ "$WIZARD" = 1 ]; then
+	HERE=$(curl -fsS --max-time 10 https://api.ipify.org 2>/dev/null || true)
+	say ''
+	say 'Установка панели Marvia. Три вопроса — и дальше всё само.'
+	say ''
+	if [ -n "$HERE" ]; then
+		say "1. Домен панели. Заведи у регистратора запись A на адрес $HERE"
+	else
+		say '1. Домен панели. Заведи у регистратора запись A на адрес этого сервера'
+	fi
+	say '   и впиши домен сюда, например panel.example.com.'
+	while [ -z "$DOMAIN" ]; do
+		ask '   домен' ''
+		DOMAIN=$(printf '%s' "$REPLY" | tr -d ' ' | tr 'A-Z' 'a-z' | sed 's#^https*://##; s#/.*$##')
+	done
+	say ''
+	say '2. Почта для Let'"'"'s Encrypt — туда напишут, если сертификат не продлится.'
+	say '   Можно пропустить.'
+	ask '   почта' ''
+	EMAIL=$REPLY
+	say ''
+	say '3. Порт панели. 443 — обычный; другой нужен, если 443 занят нодой.'
+	ask '   порт' "$PORT"
+	PORT=$REPLY
+	case "$PORT" in
+	''|*[!0-9]*) die "порт — число от 1 до 65535, а не «$PORT»" ;;
+	esac
+	[ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || die "порт — число от 1 до 65535, а не «$PORT»"
+	say ''
+fi
+
 [ -n "$DOMAIN" ] || die 'не задан домен: --domain panel.example.com'
 
 if [ -d "$DIR" ]; then
@@ -77,6 +142,14 @@ DOMAIN_IP=$(getent ahostsv4 "$DOMAIN" 2>/dev/null | awk '{print $1; exit}')
 # не получить, и продолжать бессмысленно. Или домен спрятан за CDN, и тогда
 # так и должно быть: проверка владения доменом проходит насквозь до панели.
 # Отличить одно от другого отсюда нельзя, поэтому решает человек.
+# В мастере не обрываем, а спрашиваем: человек мог спрятать домен за
+# Cloudflare и не знать, что для этого есть отдельный ключ.
+if [ "$WIZARD" = 1 ] && [ -n "$MY_IP" ] && [ "$DOMAIN_IP" != "$MY_IP" ] && [ "$BEHIND_PROXY" != 1 ]; then
+	say "$DOMAIN ведёт на $DOMAIN_IP, а этот сервер $MY_IP."
+	if agree 'Домен спрятан за Cloudflare или другим CDN, и так задумано?'; then
+		BEHIND_PROXY=1
+	fi
+fi
 if [ -n "$MY_IP" ] && [ "$DOMAIN_IP" != "$MY_IP" ] && [ "$BEHIND_PROXY" != 1 ]; then
 	die "$DOMAIN ведёт на $DOMAIN_IP, а этот сервер $MY_IP.
 Поправь запись A и подожди, пока разойдётся.

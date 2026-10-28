@@ -34,15 +34,28 @@ import (
 	"github.com/jytt8u/marvia/internal/vp1"
 )
 
-// freePort берёт свободный порт у системы.
+// freePort берёт у системы порт, свободный и для TCP, и для UDP.
+//
+// Shadowsocks слушает оба на одном номере. Свободный TCP-порт на Windows
+// бывает занят для UDP — система держит диапазоны под свои службы, — и
+// тест падал «bind: access permissions» раз в несколько прогонов CI.
 func freePort(t *testing.T) int {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	for range 50 {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		port := ln.Addr().(*net.TCPAddr).Port
+		udp, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port})
+		ln.Close()
+		if err == nil {
+			udp.Close()
+			return port
+		}
 	}
-	defer ln.Close()
-	return ln.Addr().(*net.TCPAddr).Port
+	t.Fatal("нет порта, свободного и для TCP, и для UDP")
+	return 0
 }
 
 // selfSigned выпускает сертификат на 127.0.0.1 для серверов с TLS.

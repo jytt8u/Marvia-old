@@ -338,9 +338,7 @@ class MoreScreen(
         ui.dnsSecureSub.setText(
             if (store.dnsSecure && !store.dnsSecureNow) R.string.conn_dns_secure_own else R.string.conn_dns_secure_sub,
         )
-        ui.languageValue.text = host.getString(
-            if (store.language == Store.LANG_EN) R.string.language_en else R.string.language_ru,
-        )
+        ui.languageValue.text = host.getString(LanguageScreen.label(store.language))
 
         ui.appsSummary.text = appsSummary()
         ui.aboutSub.text = host.getString(R.string.about_sub, version)

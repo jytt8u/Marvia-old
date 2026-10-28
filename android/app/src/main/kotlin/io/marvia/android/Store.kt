@@ -727,6 +727,8 @@ class Store(context: Context) {
         private const val EXIT_COUNTRY_MAX_AGE = 30L * 24 * 60 * 60 * 1000
         const val LANG_RU = "ru"
         const val LANG_EN = "en"
+        const val LANG_KK = "kk"
+        const val LANG_UZ = "uz"
 
         const val BYPASS_EXCLUDE = "exclude"
         const val BYPASS_INCLUDE = "include"

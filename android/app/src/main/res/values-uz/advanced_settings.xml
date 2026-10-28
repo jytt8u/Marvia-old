@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/advanced_settings.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="advanced_title">Qoʻshimcha VPN sozlamalari</string>
+    <string name="advanced_subtitle">Tarmoq, maxfiylik va fon tekshiruvlari</string>
+    <string name="advanced_network_group">TARMOQ</string>
+    <string name="advanced_monitor_group">FON FAOLLIGI</string>
+    <string name="advanced_mtu">Paket hajmi (MTU)</string>
+    <string name="advanced_mtu_sub">Baʼzi saytlar qisman yuklansa, 1280 ni sinab koʻring. Oʻzgartirgandan keyin qayta ulaning.</string>
+    <string name="advanced_metered">VPN’ni pullik tarmoq deb hisoblash</string>
+    <string name="advanced_metered_sub">Ilovalar katta yuklashlarni keyinga qoldirishi mumkin. Odatda VPN asosiy Wi-Fi yoki mobil tarmoqqa moslashadi.</string>
+    <string name="advanced_metered_auto">Tarmoqqa moslash</string>
+    <string name="advanced_metered_always">Doim</string>
+    <string name="advanced_reports">Nod mavjudligi haqida hisobotlar</string>
+    <string name="advanced_reports_sub">Marvia kalitlari uchun: ulanganda oʻlchov natijalarini sotuvchi paneliga yuborish. Nod tanloviga taʼsir qilmaydi.</string>
+    <string name="advanced_reports_on">Yuborish</string>
+    <string name="advanced_reports_off">Yubormaslik</string>
+    <string name="advanced_notification">VPN bildirishnomasi</string>
+    <string name="advanced_notification_sub">Ixcham koʻrinish nod va tezlikni yashiradi. Ulanish holati koʻrinib turadi.</string>
+    <string name="advanced_notification_full">Batafsil</string>
+    <string name="advanced_notification_compact">Ixcham</string>
+    <string name="notification_compact_status">VPN ulangan</string>
+    <string name="notification_compact_detail">Marvia ishlayapti</string>
+    <string name="advanced_preset">Fon faolligi rejimi</string>
+    <string name="advanced_preset_sub">Quyidagi uchta oraliqni oʻrnatadi. Har birini alohida ham oʻzgartirish mumkin.</string>
+    <string name="advanced_preset_battery">Batareyani tejash</string>
+    <string name="advanced_preset_balanced">Standart</string>
+    <string name="advanced_preset_detailed">Batafsil</string>
+    <string name="advanced_live">Ekran yoniqligida yangilash oraligʻi</string>
+    <string name="advanced_live_sub">Tezlik, trafik va bildirishnoma qanchalik tez-tez yangilanadi.</string>
+    <string name="advanced_idle">Ekran oʻchiqligida yangilash oraligʻi</string>
+    <string name="advanced_idle_sub">Telefon faolligini kamaytirish uchun fonda kamroq tekshirish.</string>
+    <string name="advanced_ping">Kechikishni tekshirish oraligʻi</string>
+    <string name="advanced_ping_sub">Ekran va bildirishnomadagi kechikish. Oʻchiq boʻlsa ham, avtomatik almashish uchun nod tekshiruvlari qoladi.</string>
+    <string name="advanced_seconds">%1$d s</string>
+    <string name="advanced_off_short">Oʻchiq</string>
+    <string name="advanced_next_connection">MTU, tarmoq turi va hisobotlar keyingi ulanishda qoʻllanadi. Oraliqlar va bildirishnoma koʻrinishi qayta ulanmasdan keyingi yangilanishda oʻzgaradi.</string>
+</resources>

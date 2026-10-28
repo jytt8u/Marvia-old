@@ -693,7 +693,7 @@ class ThemeScreen(
                 id<TextView>(R.id.moreTitle)?.textSize = if (store.appearanceStyle == AppearanceStyle.SIGNAL) 32f else 26f
                 id<TextView>(R.id.moreSub)?.text = host.getString(R.string.more_sub, appVersion)
                 id<TextView>(R.id.appsSummary)?.text = host.getString(R.string.apps_summary_names, 3, "Госуслуги, Сбербанк, Т-Банк")
-                id<TextView>(R.id.languageValue)?.setText(if (store.language == Store.LANG_EN) R.string.language_en else R.string.language_ru)
+                id<TextView>(R.id.languageValue)?.setText(LanguageScreen.label(store.language))
                 id<TextView>(R.id.dnsValue)?.text = "Cloudflare"
                 id<TextView>(R.id.aboutSub)?.text = host.getString(R.string.about_sub, appVersion)
                 id<LinearLayout>(R.id.appearanceRows)?.let { rows ->

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/appearance.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="vibe_graphite">Графит</string>
+    <string name="vibe_graphite_sub">Marvia басталған сұр түс</string>
+    <string name="vibe_summit">Шың</string>
+    <string name="vibe_summit_sub">Ақ-қарадағы қарлы шың</string>
+    <string name="vibe_sakura">Сакура</string>
+    <string name="vibe_sakura_sub">Гүлдеген бұтақ пен шамдар</string>
+    <string name="vibe_champagne">Шампан</string>
+    <string name="vibe_champagne_sub">Фокустан тыс жылы алтын шамдар</string>
+    <string name="vibe_noir">Қала</string>
+    <string name="vibe_noir_sub">Терезелері жанған сұр қала</string>
+    <string name="vibe_haze">Тұман</string>
+    <string name="vibe_haze_sub">Тұмандағы ағаштар мен бозғылт гүлдер</string>
+    <string name="vibe_autumn">Күз</string>
+    <string name="vibe_autumn_sub">Тұмандағы шамдар мен түскен жапырақтар</string>
+    <string name="vibe_bordeaux">Бордо</string>
+    <string name="vibe_bordeaux_sub">Қою шарап түсіндегі лалагүлдер</string>
+    <string name="vibe_powder">Опа</string>
+    <string name="vibe_powder_sub">Ашық, жұмсақ қызғылт жапырақшалармен</string>
+    <string name="appearance_styles">Түрлер</string>
+    <string name="appearance_styles_sub">Қолданбаңызға түр таңдаңыз.</string>
+    <string name="appearance_controls">Көрініс және кері байланыс</string>
+    <string name="appearance_motion">Анимацияны азайту</string>
+    <string name="appearance_motion_sub">Ауысулар мен қосылу индикаторын қозғалыссыз қалдыру</string>
+    <string name="appearance_home_stats">Басты экрандағы статистика</string>
+    <string name="appearance_home_stats_sub">Бүгінгі трафик, сеанс және ағымдағы жылдамдық</string>
+    <string name="appearance_monitor">Статистика және батарея</string>
+    <string name="appearance_monitor_sub">Есептегіштер мен пингтің жаңаруын басқарады. Байланысты қалпына келтіру автоматты түрде қалады.</string>
+    <string name="connect_signal_ready">Дайын болсаңыз, бастаймыз</string>
+    <string name="connect_signal_add">Кіру сілтемесін қойыңыз</string>
+    <string name="connect_badge_off">ӨШІРУЛІ</string>
+    <string name="connect_badge_on">VPN БЕЛСЕНДІ</string>
+    <string name="connect_badge_wait">ҚОСЫЛУДА</string>
+    <string name="connect_badge_error">ҚОСЫЛУДЫ ТЕКСЕРІҢІЗ</string>
+    <string name="appearance_selected">Таңдалған</string>
+    <string name="appearance_preview_example">Алдын ала қарау · үлгі деректер</string>
+    <string name="appearance_preview_expand">Толық экранда қарау</string>
+    <string name="appearance_customize">Егжей-тегжейін баптау</string>
+    <string name="appearance_customizing">Баптауды жасыру</string>
+    <string name="appearance_screen_language">Көрініс және тіл</string>
+    <string name="appearance_quota_unknown">Жазылым деректері әлі жоқ</string>
+    <string name="appearance_stats_empty">Тарихыңыз қосылғанда басталады</string>
+    <string name="appearance_stats_empty_sub">Трафик VPN арқылы жүре бастағанда графиктер пайда болады.</string>
+    <string name="appearance_stats_details">Толық статистика</string>
+    <string name="appearance_stats_less">Толығырағын жасыру</string>
+    <string name="appearance_dial_legend">Әр күнге бір белгі. Ашығырақ болса — трафик көбірек.</string>
+    <string name="appearance_access_name">Атауы · міндетті емес</string>
+    <string name="appearance_access_link">Кіру сілтемесі</string>
+    <string name="appearance_access_hint">Кіру берген адамнан алған сілтемені қойыңыз</string>
+    <string name="appearance_close_preview">Алдын ала қарауды жабу</string>
+</resources>

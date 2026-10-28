@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/routing_messages.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="routes_retry_later">Бағыттар тізімі қолжетімсіз. Кейінірек қайталаймыз.</string>
+</resources>

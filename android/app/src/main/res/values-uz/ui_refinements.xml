@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/ui_refinements.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="connect_add_key_in_servers">Kalitni «Serverlar» boʻlimida qoʻshing</string>
+    <string name="servers_add_key">Kalit qoʻshish</string>
+    <string name="vpn_advanced_title">Qoʻshimcha VPN</string>
+    <string name="vpn_advanced_sub">Tarmoq va holatni yangilash sozlamalari</string>
+</resources>

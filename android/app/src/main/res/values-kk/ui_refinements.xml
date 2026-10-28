@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/ui_refinements.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="connect_add_key_in_servers">Кілтті «Серверлер» қойындысында қосыңыз</string>
+    <string name="servers_add_key">Кілт қосу</string>
+    <string name="vpn_advanced_title">Қосымша VPN</string>
+    <string name="vpn_advanced_sub">Желі және күйді жаңарту баптаулары</string>
+</resources>

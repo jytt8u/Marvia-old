@@ -29,9 +29,18 @@ class LanguageScreen(
     private var picked = Store.LANG_RU
     private val dp = host.resources.displayMetrics.density
 
+    /** Карточка языка, её отметка и надпись «Продолжить» на этом языке. */
+    private class Choice(val card: android.view.View, val mark: android.view.View, val next: Int)
+
+    private val choices = mapOf(
+        Store.LANG_RU to Choice(ui.langRu, ui.langRuMark, R.string.language_continue_ru),
+        Store.LANG_EN to Choice(ui.langEn, ui.langEnMark, R.string.language_continue_en),
+        Store.LANG_KK to Choice(ui.langKk, ui.langKkMark, R.string.language_continue_kk),
+        Store.LANG_UZ to Choice(ui.langUz, ui.langUzMark, R.string.language_continue_uz),
+    )
+
     init {
-        ui.langRu.setOnClickListener { pick(Store.LANG_RU) }
-        ui.langEn.setOnClickListener { pick(Store.LANG_EN) }
+        for ((lang, choice) in choices) choice.card.setOnClickListener { pick(lang) }
         ui.langContinue.setOnClickListener { apply() }
     }
 
@@ -58,12 +67,12 @@ class LanguageScreen(
         ui.stepOne.background = Paint.rounded(t.acc, 999, dp)
         ui.stepTwo.background = Paint.rounded(t.line, 999, dp)
 
-        val ru = picked == Store.LANG_RU
-        ui.langRu.background = Paint.card(t, dp, stroke = if (ru) t.acc else t.line)
-        ui.langEn.background = Paint.card(t, dp, stroke = if (ru) t.line else t.acc)
-        ui.langRuMark.background = Paint.ring(t, dp, chosen = ru)
-        ui.langEnMark.background = Paint.ring(t, dp, chosen = !ru)
-        ui.langContinue.setText(if (ru) R.string.language_continue_ru else R.string.language_continue_en)
+        for ((lang, choice) in choices) {
+            val on = lang == picked
+            choice.card.background = Paint.card(t, dp, stroke = if (on) t.acc else t.line)
+            choice.mark.background = Paint.ring(t, dp, chosen = on)
+        }
+        ui.langContinue.setText((choices[picked] ?: choices.getValue(Store.LANG_RU)).next)
     }
 
     /**
@@ -85,11 +94,23 @@ class LanguageScreen(
 
     private fun guess(): String {
         val system = host.resources.configuration.locales[0].language
-        return if (system in RUSSIAN_READERS) Store.LANG_RU else Store.LANG_EN
+        return when (system) {
+            Store.LANG_KK, Store.LANG_UZ -> system
+            in RUSSIAN_READERS -> Store.LANG_RU
+            else -> Store.LANG_EN
+        }
     }
 
-    private companion object {
+    companion object {
+        /** label — имя языка для строки «Язык» в настройках. */
+        fun label(lang: String): Int = when (lang) {
+            Store.LANG_EN -> R.string.language_en
+            Store.LANG_KK -> R.string.language_kk
+            Store.LANG_UZ -> R.string.language_uz
+            else -> R.string.language_ru
+        }
+
         /** Те же языки, с которыми окно на компьютере подсказывает русский. */
-        val RUSSIAN_READERS = setOf("ru", "be", "uk", "kk", "ky", "uz", "tg", "hy", "az")
+        private val RUSSIAN_READERS = setOf("ru", "be", "uk", "kk", "ky", "uz", "tg", "hy", "az")
     }
 }

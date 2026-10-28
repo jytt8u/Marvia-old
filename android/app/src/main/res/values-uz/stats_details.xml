@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/stats_details.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="stats_observed_average">Kuniga oʻrtacha %1$s</string>
+    <string name="stats_days_observed">birinchi foydalanishdan beri kunlar</string>
+    <string name="stats_speed_connect">Jonli tezlikni koʻrish uchun ulaning.</string>
+    <string name="stats_speed_down">Hozir yuklab olish: %1$s</string>
+    <string name="stats_speed_up">Hozir yuborish: %1$s</string>
+    <string name="stats_speed_average">Seans boʻyicha oʻrtacha: %1$s</string>
+    <string name="stats_speed_peak">Umumiy choʻqqi: %1$s</string>
+    <string name="stats_speed_sample_note">Shu qurilmaning VPN trafigi boʻyicha.</string>
+    <string name="stats_session_current">Joriy seans</string>
+    <string name="stats_sessions_previous">Shu qurilmadagi oldingi seanslar</string>
+    <string name="stats_sessions_empty">Hozircha seanslar yozilmagan.</string>
+</resources>

@@ -40,6 +40,12 @@
     <string name="language_en_other" translatable="false">Английский</string>
     <string name="language_continue_ru" translatable="false">Продолжить</string>
     <string name="language_continue_en" translatable="false">Continue</string>
+    <string name="language_kk" translatable="false">Қазақша</string>
+    <string name="language_kk_other" translatable="false">Казахский · Kazakh</string>
+    <string name="language_continue_kk" translatable="false">Жалғастыру</string>
+    <string name="language_uz" translatable="false">Oʻzbekcha</string>
+    <string name="language_uz_other" translatable="false">Узбекский · Uzbek</string>
+    <string name="language_continue_uz" translatable="false">Davom etish</string>
     <string name="settings_language">Language</string>
 
     <string name="perms_title">What you will need</string>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/insights.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="insights_back">Tunnelga qaytish</string>
+    <string name="insights_subtitle">Shu telefon · VPN tunnel</string>
+    <string name="insights_live">JONLI TEZLIK</string>
+    <string name="insights_window">Oxirgi 120 oʻlchov</string>
+    <string name="insights_speed_legend">↓ yuklab olish ↑ yuborish</string>
+    <string name="insights_speed_chart">Yuklab olish va yuborish tezligining jonli grafigi</string>
+    <string name="insights_download">↓ Yuklab olish</string>
+    <string name="insights_upload">↑ Yuborish</string>
+    <string name="insights_this_session">Joriy seans</string>
+    <string name="insights_average">Oʻrtacha · %1$s</string>
+    <string name="insights_peak">Umumiy choʻqqi · %1$s</string>
+    <string name="insights_current_traffic">↓ %1$s olindi ↑ %2$s yuborildi</string>
+    <string name="insights_not_connected">Faol seans yoʻq</string>
+    <string name="insights_traffic_split">Olingan va yuborilgan trafik ulushi</string>
+    <string name="insights_recent_chart">Soʻnggi seanslar</string>
+    <string name="insights_session_chart">Soʻnggi seanslardagi trafik</string>
+    <string name="insights_chart_note">Shu telefondagi seanslar boʻyicha trafik</string>
+    <string name="insights_history_count">Tarix · %1$d</string>
+    <string name="insights_recent">Soʻnggilari</string>
+    <string name="insights_all">Hammasi</string>
+    <string name="insights_show_more">Koʻproq seans koʻrsatish</string>
+    <string name="insights_session_item">%1$s · %2$s</string>
+    <string name="insights_session_bytes">↓ %1$s ↑ %2$s</string>
+</resources>

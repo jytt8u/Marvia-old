@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/appearance.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="vibe_graphite">Grafit</string>
+    <string name="vibe_graphite_sub">Marvia boshlangan kul rang</string>
+    <string name="vibe_summit">Choʻqqi</string>
+    <string name="vibe_summit_sub">Oq-qorada qorli choʻqqi</string>
+    <string name="vibe_sakura">Sakura</string>
+    <string name="vibe_sakura_sub">Gullagan shox va chiroqlar</string>
+    <string name="vibe_champagne">Shampan</string>
+    <string name="vibe_champagne_sub">Fokusdan tashqaridagi iliq oltin chiroqlar</string>
+    <string name="vibe_noir">Shahar</string>
+    <string name="vibe_noir_sub">Derazalari yongan kulrang shahar</string>
+    <string name="vibe_haze">Tuman</string>
+    <string name="vibe_haze_sub">Tumandagi daraxtlar va och gullar</string>
+    <string name="vibe_autumn">Kuz</string>
+    <string name="vibe_autumn_sub">Tumandagi chiroqlar va toʻkilgan barglar</string>
+    <string name="vibe_bordeaux">Bordo</string>
+    <string name="vibe_bordeaux_sub">Toʻq sharob rangidagi liliyalar</string>
+    <string name="vibe_powder">Upa</string>
+    <string name="vibe_powder_sub">Och, yumshoq pushti gulbargli</string>
+    <string name="appearance_styles">Koʻrinishlar</string>
+    <string name="appearance_styles_sub">Ilovangiz uchun koʻrinish tanlang.</string>
+    <string name="appearance_controls">Koʻrinish va javob</string>
+    <string name="appearance_motion">Animatsiyani kamaytirish</string>
+    <string name="appearance_motion_sub">Oʻtishlar va ulanish indikatorini harakatsiz qoldirish</string>
+    <string name="appearance_home_stats">Bosh ekranda statistika</string>
+    <string name="appearance_home_stats_sub">Bugungi trafik, seans va joriy tezlik</string>
+    <string name="appearance_monitor">Statistika va batareya</string>
+    <string name="appearance_monitor_sub">Hisoblagichlar va ping yangilanishini boshqaradi. Ulanishni tiklash avtomatik qoladi.</string>
+    <string name="connect_signal_ready">Tayyor boʻlsangiz, boshlaymiz</string>
+    <string name="connect_signal_add">Kirish havolasini qoʻying</string>
+    <string name="connect_badge_off">OʻCHIQ</string>
+    <string name="connect_badge_on">VPN FAOL</string>
+    <string name="connect_badge_wait">ULANMOQDA</string>
+    <string name="connect_badge_error">ULANISHNI TEKSHIRING</string>
+    <string name="appearance_selected">Tanlangan</string>
+    <string name="appearance_preview_example">Oldindan koʻrish · namuna maʼlumotlar</string>
+    <string name="appearance_preview_expand">Toʻliq ekranda koʻrish</string>
+    <string name="appearance_customize">Tafsilotlarni sozlash</string>
+    <string name="appearance_customizing">Sozlashni yashirish</string>
+    <string name="appearance_screen_language">Koʻrinish va til</string>
+    <string name="appearance_quota_unknown">Obuna maʼlumotlari hali yoʻq</string>
+    <string name="appearance_stats_empty">Tarixingiz ulanganingizda boshlanadi</string>
+    <string name="appearance_stats_empty_sub">Trafik VPN orqali oʻta boshlaganda grafiklar paydo boʻladi.</string>
+    <string name="appearance_stats_details">Batafsil statistika</string>
+    <string name="appearance_stats_less">Tafsilotlarni yashirish</string>
+    <string name="appearance_dial_legend">Har kunga bitta belgi. Yorqinroq — trafik koʻproq.</string>
+    <string name="appearance_access_name">Nomi · ixtiyoriy</string>
+    <string name="appearance_access_link">Kirish havolasi</string>
+    <string name="appearance_access_hint">Kirish bergan odamdan olgan havolani qoʻying</string>
+    <string name="appearance_close_preview">Oldindan koʻrishni yopish</string>
+</resources>

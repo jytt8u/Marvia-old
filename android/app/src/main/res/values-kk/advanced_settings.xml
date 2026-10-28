@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/advanced_settings.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="advanced_title">Қосымша VPN баптаулары</string>
+    <string name="advanced_subtitle">Желі, құпиялылық және фондық тексерулер</string>
+    <string name="advanced_network_group">ЖЕЛІ</string>
+    <string name="advanced_monitor_group">ФОНДЫҚ БЕЛСЕНДІЛІК</string>
+    <string name="advanced_mtu">Пакет өлшемі (MTU)</string>
+    <string name="advanced_mtu_sub">Кейбір сайттар жартылай ғана жүктелсе, 1280 көріңіз. Өзгерткеннен кейін қайта қосылыңыз.</string>
+    <string name="advanced_metered">VPN-ді шектеулі желі деп санау</string>
+    <string name="advanced_metered_sub">Қолданбалар үлкен жүктеулерді кейінге қалдыруы мүмкін. Әдепкіде VPN негізгі Wi-Fi немесе мобильді желіге сәйкес келеді.</string>
+    <string name="advanced_metered_auto">Желіге сәйкес</string>
+    <string name="advanced_metered_always">Әрқашан</string>
+    <string name="advanced_reports">Нода қолжетімділігі туралы есептер</string>
+    <string name="advanced_reports_sub">Marvia кілттері үшін: қосылғанда өлшеу нәтижелерін сатушы панеліне жіберу. Нода таңдауына әсер етпейді.</string>
+    <string name="advanced_reports_on">Жіберу</string>
+    <string name="advanced_reports_off">Жібермеу</string>
+    <string name="advanced_notification">VPN хабарландыруы</string>
+    <string name="advanced_notification_sub">Ықшам түр нода мен жылдамдықты жасырады. Қосылу күйі көрініп тұрады.</string>
+    <string name="advanced_notification_full">Толық</string>
+    <string name="advanced_notification_compact">Ықшам</string>
+    <string name="notification_compact_status">VPN қосылған</string>
+    <string name="notification_compact_detail">Marvia жұмыс істеп тұр</string>
+    <string name="advanced_preset">Фондық белсенділік режимі</string>
+    <string name="advanced_preset_sub">Төмендегі үш аралықты орнатады. Әрқайсысын бөлек те өзгертуге болады.</string>
+    <string name="advanced_preset_battery">Батареяны үнемдеу</string>
+    <string name="advanced_preset_balanced">Стандартты</string>
+    <string name="advanced_preset_detailed">Толық</string>
+    <string name="advanced_live">Экран қосулы кездегі жаңарту аралығы</string>
+    <string name="advanced_live_sub">Жылдамдық, трафик және хабарландыру қаншалықты жиі жаңарады.</string>
+    <string name="advanced_idle">Экран өшірулі кездегі жаңарту аралығы</string>
+    <string name="advanced_idle_sub">Телефон белсенділігін азайту үшін фонда сирек тексеру.</string>
+    <string name="advanced_ping">Кідірісті тексеру аралығы</string>
+    <string name="advanced_ping_sub">Экрандағы және хабарландырудағы кідіріс. Өшірулі болса да, автоматты ауысу үшін нода тексерулері қалады.</string>
+    <string name="advanced_seconds">%1$d с</string>
+    <string name="advanced_off_short">Өшірулі</string>
+    <string name="advanced_next_connection">MTU, желі түрі және есептер келесі қосылғанда қолданылады. Аралықтар мен хабарландыру түрі қайта қосылмай-ақ келесі жаңартуда өзгереді.</string>
+</resources>

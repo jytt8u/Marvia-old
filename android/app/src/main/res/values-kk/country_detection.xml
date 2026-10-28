@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/country_detection.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="country_detection_explain">Marvia елді сервер атауынан анықтайды. Белгі болмаса, қосылғаннан кейін VPN арқылы шығу IP мекенжайын тексереді. Белгісіз серверлер белгісіз қалады.</string>
+    <string name="country_from_exit_ip">шығу IP бойынша</string>
+</resources>

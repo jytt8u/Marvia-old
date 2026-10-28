@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/insights.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="insights_back">Туннельге оралу</string>
+    <string name="insights_subtitle">Осы телефон · VPN туннелі</string>
+    <string name="insights_live">ТІКЕЛЕЙ ЖЫЛДАМДЫҚ</string>
+    <string name="insights_window">Соңғы 120 өлшем</string>
+    <string name="insights_speed_legend">↓ жүктеу ↑ жіберу</string>
+    <string name="insights_speed_chart">Жүктеу және жіберу жылдамдығының тікелей графигі</string>
+    <string name="insights_download">↓ Жүктеу</string>
+    <string name="insights_upload">↑ Жіберу</string>
+    <string name="insights_this_session">Ағымдағы сеанс</string>
+    <string name="insights_average">Орташа · %1$s</string>
+    <string name="insights_peak">Жалпы шың · %1$s</string>
+    <string name="insights_current_traffic">↓ %1$s алынды ↑ %2$s жіберілді</string>
+    <string name="insights_not_connected">Белсенді сеанс жоқ</string>
+    <string name="insights_traffic_split">Алынған және жіберілген трафиктің үлесі</string>
+    <string name="insights_recent_chart">Соңғы сеанстар</string>
+    <string name="insights_session_chart">Соңғы сеанстардағы трафик</string>
+    <string name="insights_chart_note">Осы телефондағы сеанс бойынша трафик</string>
+    <string name="insights_history_count">Тарих · %1$d</string>
+    <string name="insights_recent">Соңғылары</string>
+    <string name="insights_all">Барлығы</string>
+    <string name="insights_show_more">Көбірек сеанс көрсету</string>
+    <string name="insights_session_item">%1$s · %2$s</string>
+    <string name="insights_session_bytes">↓ %1$s ↑ %2$s</string>
+</resources>

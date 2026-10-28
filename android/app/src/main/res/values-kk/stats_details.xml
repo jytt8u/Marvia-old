@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/stats_details.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="stats_observed_average">Орташа күніне %1$s</string>
+    <string name="stats_days_observed">алғаш қолданғаннан бергі күндер</string>
+    <string name="stats_speed_connect">Тікелей жылдамдықты көру үшін қосылыңыз.</string>
+    <string name="stats_speed_down">Қазір жүктеу: %1$s</string>
+    <string name="stats_speed_up">Қазір жіберу: %1$s</string>
+    <string name="stats_speed_average">Сеанс бойынша орташа: %1$s</string>
+    <string name="stats_speed_peak">Жалпы шың: %1$s</string>
+    <string name="stats_speed_sample_note">Осы құрылғының VPN трафигі бойынша.</string>
+    <string name="stats_session_current">Ағымдағы сеанс</string>
+    <string name="stats_sessions_previous">Осы құрылғыдағы алдыңғы сеанстар</string>
+    <string name="stats_sessions_empty">Әзірге сеанстар жазылмаған.</string>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сгенерировано из values/camera.xml и переводов; вычитать носителем. -->
+<resources>
+    <string name="key_camera">Kamera</string>
+    <string name="key_camera_description">Kalitni QR-koddan kamera bilan oʻqish</string>
+    <string name="camera_hint">Kamerani kalitning QR-kodiga qarating</string>
+    <string name="camera_denied">kameraga ruxsat yoʻq — kalitni qoʻyish yoki QR-kod rasmini tanlash mumkin</string>
+    <string name="camera_settings">Sozlamalarda ruxsat berish</string>
+    <string name="camera_unavailable">kamera mavjud emas — QR-kod rasmini tanlab koʻring</string>
+    <string name="camera_close">Yopish</string>
+</resources>
